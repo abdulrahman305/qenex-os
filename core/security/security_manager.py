@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Set
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2SHA256 as PBKDF2
 from cryptography.hazmat.backends import default_backend
 
 @dataclass
@@ -93,7 +93,6 @@ class SecurityManager:
             salt = os.urandom(32)
         
         kdf = PBKDF2(
-            algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
             iterations=100000,
