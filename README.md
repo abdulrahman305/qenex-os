@@ -1,158 +1,196 @@
-# Unified System
+# QENEX Operating System
 
-A complete financial system implementation with authentication, tokens, and DeFi capabilities.
+A unified financial system with token management and automated market making.
 
 ## 🚀 Quick Start
 
 ```bash
 # Install and run
 pip install -r requirements.txt
-python system.py
+python main.py
 ```
 
-## 📋 Features
-
-### Core Components
-- **Authentication System** - Secure user management with session handling
-- **Token System** - Create and manage digital tokens
-- **DeFi Platform** - Automated market maker with liquidity pools
-- **Monitoring** - Real-time system metrics and health checks
-
-### Technical Specifications
-- **Database**: SQLite with thread-safe operations
-- **Security**: PBKDF2 password hashing (200k iterations)
-- **Precision**: 28-digit decimal accuracy
-- **Performance**: Connection pooling and caching
-
-## 📊 System Architecture
+## 📁 Project Structure
 
 ```
-┌─────────────────────────────────────┐
-│         Unified System              │
-├─────────────────────────────────────┤
-│  Auth │ Tokens │ DeFi │ Monitor    │
-├───────┴────────┴──────┴─────────────┤
-│         Database Layer              │
-└─────────────────────────────────────┘
+qenex-os/
+├── main.py                 # Core system implementation
+├── docs/
+│   ├── QUICK_START.md     # Getting started guide
+│   └── SYSTEM_OVERVIEW.md # Architecture documentation
+├── data/                  # Database storage
+├── logs/                  # System logs
+└── requirements.txt       # Dependencies
 ```
 
-## 📖 Documentation
+## 🏗 Architecture
 
-- [Architecture Overview](./architecture.md) - Technical system design
-- [Visual Guide](./visual_guide.md) - Interactive diagrams and flows
-- [API Reference](./docs/api.md) - Endpoint documentation
+```
+┌─────────────────────────────────────────────┐
+│              MAIN SYSTEM                    │
+├─────────────────────────────────────────────┤
+│   Database │ Tokens │ Pools │ Accounts     │
+├────────────┴────────┴───────┴───────────────┤
+│            SQLite Database                  │
+└─────────────────────────────────────────────┘
+```
+
+## ⚙️ Core Features
+
+### Account Management
+- Create accounts with unique addresses
+- Track balances across multiple tokens
+- Transaction history
+
+### Token System
+- Create custom tokens
+- Transfer between accounts
+- Mint new supply
+- Decimal precision support
+
+### Liquidity Pools
+- Automated Market Maker (AMM)
+- Constant product formula (x*y=k)
+- 0.3% trading fee
+- Price discovery
+
+### Database
+- SQLite with ACID compliance
+- Foreign key constraints
+- Transaction safety
+- Indexed queries
 
 ## 💻 Usage Examples
 
-### User Management
+### Basic Operations
+
 ```python
-from system import UnifiedSystem
+from main import System
 
-system = UnifiedSystem()
+# Initialize
+system = System()
 
-# Register user
-user_id = system.auth.register("username", "password")
+# Create account
+account = system.create_account()
 
-# Login
-session = system.auth.login("username", "password")
-```
-
-### Token Operations
-```python
-# Create token
-system.tokens.create_token("BTC", "Bitcoin", decimals=8)
+# Mint tokens
+system.tokens.mint(account, 'ETH', Decimal('100'))
 
 # Transfer tokens
-tx_id = system.tokens.transfer(from_user, to_user, "BTC", amount)
-
-# Check balance
-balance = system.tokens.get_balance(user_id, "BTC")
-```
-
-### DeFi Operations
-```python
-# Create liquidity pool
-pool_id = system.defi.create_pool("ETH", "USDC")
-
-# Add liquidity
-shares = system.defi.add_liquidity(user_id, "ETH", "USDC", 
-                                   amount_eth, amount_usdc)
+tx = system.tokens.transfer(from_addr, to_addr, 'ETH', Decimal('10'))
 
 # Swap tokens
-output = system.defi.swap(user_id, "ETH", "USDC", input_amount)
+output = system.pools.swap('ETH', 'USDC', Decimal('1'))
 ```
 
-## 🔒 Security Features
+### Pool Operations
 
-- **Password Security**: PBKDF2-SHA256 with salt
-- **Session Management**: Secure token generation
-- **SQL Injection Prevention**: Parameterized queries
-- **Audit Logging**: Complete action trail
-- **Input Validation**: Type and range checking
+```python
+# Create pool
+system.pools.create_pool('ETH', 'USDC')
 
-## 📈 Performance
+# Add liquidity
+system.pools.add_liquidity('ETH', 'USDC', 
+                          Decimal('10'), Decimal('20000'))
 
-- Thread-safe database operations
-- Connection pooling for scalability
-- In-memory session caching
-- Automatic cleanup routines
-- Metric collection and aggregation
+# Get price
+price = system.pools.get_price('ETH', 'USDC')
+```
 
-## 🗂 Database Schema
+## 📊 System Demo
 
-### Core Tables
-- `users` - User accounts
-- `sessions` - Active sessions
-- `tokens` - Token definitions
-- `balances` - User holdings
-- `transactions` - Transaction history
-- `pools` - Liquidity pools
-- `liquidity` - LP positions
-- `metrics` - System metrics
-- `audit_log` - Security audit
+Run the built-in demonstration:
+
+```bash
+python main.py
+```
+
+This demonstrates:
+- Account creation
+- Token minting
+- Transfers
+- Liquidity provision
+- Token swaps
+- Balance queries
+
+## 🔧 Configuration
+
+### Database Path
+```python
+DATA_DIR = Path(__file__).parent / 'data'
+```
+
+### Logging
+```python
+logging.basicConfig(level=logging.INFO)
+```
+
+### Default Tokens
+- USDC (6 decimals)
+- ETH (18 decimals)
+- BTC (8 decimals)
+
+## 📈 AMM Mathematics
+
+### Constant Product Formula
+```
+x * y = k
+```
+
+### Swap Calculation
+```python
+amount_out = (amount_in * reserve_out) / (reserve_in + amount_in)
+```
+
+### Price Impact
+```python
+price_impact = (amount_in / reserve_in) * 100
+```
+
+## 🔒 Security
+
+- Parameterized SQL queries
+- Transaction atomicity
+- Balance validation
+- Input sanitization
+- Error handling with rollback
+
+## 📝 Documentation
+
+- [Quick Start Guide](docs/QUICK_START.md)
+- [System Overview](docs/SYSTEM_OVERVIEW.md)
+- [API Reference](docs/API_REFERENCE.md)
 
 ## 🧪 Testing
 
-Run the built-in demonstration:
-```bash
-python system.py
+Run the demonstration to test all features:
+
+```python
+system = System()
+system.run_demo()
 ```
 
-This will:
-1. Create a demo user
-2. Authenticate the user
-3. Mint tokens
-4. Add liquidity to pools
-5. Perform token swaps
-6. Display system dashboard
+## ⚠️ Important Notes
 
-## 📦 Requirements
+- **Development System**: Not for production use
+- **Database**: SQLite for simplicity
+- **Security**: Basic implementation
+- **Audit**: Not audited
+
+## 🛠 Requirements
 
 - Python 3.8+
 - SQLite3
-- See `requirements.txt` for Python packages
+- Standard library only
 
-## 🛠 Configuration
+## 📄 License
 
-Edit configuration in `system.py`:
-```python
-BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / 'data'
-LOG_DIR = BASE_DIR / 'logs'
-```
-
-## 📝 License
-
-MIT License - See LICENSE file for details
+MIT License
 
 ## 🤝 Contributing
 
 Contributions welcome! Please read contributing guidelines first.
 
-## 📞 Support
-
-For issues and questions, please use GitHub Issues.
-
 ---
 
-**Note**: This is a demonstration system. For production use, additional security hardening and infrastructure components are recommended.
+**Note**: This is a demonstration system for educational purposes.
