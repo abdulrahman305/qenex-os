@@ -1,8 +1,9 @@
-aiohttp>=3.8.0
-asyncio
-cryptography>=41.0.0
-numpy>=1.24.0
+# Core dependencies
 psutil>=5.9.0
-pyyaml>=6.0
 requests>=2.31.0
-web3>=6.0.0
+cryptography>=41.0.0
+pyjwt>=2.8.0
+
+# Optional enhanced features
+numpy>=1.24.0
+pyyaml>=6.0
