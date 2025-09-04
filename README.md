@@ -414,16 +414,6 @@ We follow responsible disclosure practices and will respond within 24 hours.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🏆 Awards & Recognition
-
-- **NIST Post-Quantum Cryptography** implementation
-- **SWIFT Excellence Award** for protocol compliance
-- **ISO 27001** certified security framework
-- **FinTech Innovation Award** 2024
-- **Banking Technology Awards** winner
-
----
-
 **Disclaimer**: This is enterprise-grade banking software. Please ensure proper compliance review and security audit before production deployment in regulated environments.
 
-**Enterprise Inquiries**: For licensing, support, and consulting, contact enterprise@qenex.ai
+**Enterprise Inquiries**: For licensing, support, and consulting, contact cto@qenex.ai
