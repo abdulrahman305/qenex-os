@@ -1,4 +1,24 @@
 pub mod live_feeds;
+pub mod real_time_compliance;
+
+#[cfg(test)]
+pub mod compliance_tests;
+
+// Export both legacy and real-time compliance systems
+pub use real_time_compliance::{
+    RealTimeComplianceEngine,
+    ComplianceEngineConfig,
+    OfficialAPIConfig,
+    RegulatoryJurisdiction,
+    CustomerData,
+    TransactionData,
+    ComplianceScreeningResult,
+    TransactionComplianceResult,
+    ComplianceError,
+    OFACScreener,
+    EUScreener,
+    AlertDeliveryMethod,
+};
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};

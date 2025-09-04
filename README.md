@@ -1,13 +1,8 @@
 # QENEX Banking Operating System
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
-[![Security](https://img.shields.io/badge/Security-Quantum%20Resistant-blue.svg)](#security)
-[![Banking](https://img.shields.io/badge/Banking-Production%20Ready-green.svg)](#compliance)
+## Enterprise Banking Infrastructure Platform
 
-## Overview
-
-QENEX OS is a revolutionary banking operating system designed from the ground up for financial institutions. It provides a secure, scalable, and compliant platform with built-in quantum-resistant cryptography, real-time transaction processing, and comprehensive regulatory compliance.
+QENEX OS is a specialized operating system designed for financial institutions, providing comprehensive banking infrastructure with integrated security, compliance, and transaction processing capabilities.
 
 ## 🏗️ Architecture
 

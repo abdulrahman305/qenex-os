@@ -1,4 +1,21 @@
 pub mod engine;
+pub mod acid_engine;
+
+#[cfg(test)]
+pub mod acid_tests;
+
+// Export both engines - ACID engine for production, legacy for compatibility  
+pub use acid_engine::{
+    ACIDTransactionEngine,
+    ACIDEngineConfig,
+    DistributedTransaction,
+    DistributedTransactionStatus,
+    TransactionOperation,
+    OperationType,
+    IsolationLevel,
+    LockMode,
+    ACIDError,
+};
 
 pub use engine::{
     TransactionEngine,
