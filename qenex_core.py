@@ -12,7 +12,7 @@ import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_DOWN
 from enum import Enum
 from pathlib import Path
@@ -184,7 +184,7 @@ class BankingCore:
         """Create a new bank account"""
         account_id = str(uuid.uuid4())
         account_number = self.generate_account_number()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         account = Account(
             id=account_id,
@@ -217,8 +217,12 @@ class BankingCore:
             account.updated_at.isoformat(), json.dumps(account.metadata)
         ))
         
-        # Audit log
-        self._audit_log(conn, "ACCOUNT_CREATED", account_id, "account", account_id, None, asdict(account))
+        # Audit log - convert account to dict with JSON-serializable values
+        account_dict = {
+            k: v.value if isinstance(v, Enum) else (str(v) if isinstance(v, (datetime, Decimal)) else v)
+            for k, v in asdict(account).items()
+        }
+        self._audit_log(conn, "ACCOUNT_CREATED", account_id, "account", account_id, None, account_dict)
         
         conn.commit()
         conn.close()
@@ -239,7 +243,7 @@ class BankingCore:
             raise ValueError("Transaction amount must be positive")
             
         transaction_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         transaction = Transaction(
             id=transaction_id,
@@ -421,10 +425,10 @@ class BankingCore:
                 entity_id, old_value, new_value, metadata
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            str(uuid.uuid4()), datetime.utcnow().isoformat(), action,
+            str(uuid.uuid4()), datetime.now(timezone.utc).isoformat(), action,
             user_id, entity_type, entity_id,
-            json.dumps(old_value) if old_value else None,
-            json.dumps(new_value) if new_value else None,
+            json.dumps(old_value, default=lambda x: x.value if isinstance(x, Enum) else str(x)) if old_value else None,
+            json.dumps(new_value, default=lambda x: x.value if isinstance(x, Enum) else str(x)) if new_value else None,
             None
         ))
         
@@ -546,7 +550,7 @@ class AuthenticationSystem:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 user_id, username, email, password_hash, salt.hex(),
-                1, int(is_admin), datetime.utcnow().isoformat()
+                1, int(is_admin), datetime.now(timezone.utc).isoformat()
             ))
             conn.commit()
             logger.info(f"User registered: {username}")
@@ -563,7 +567,7 @@ class AuthenticationSystem:
         # Check failed attempts
         if username in self.failed_attempts:
             attempts, last_attempt = self.failed_attempts[username]
-            if attempts >= 5 and (datetime.utcnow() - last_attempt).seconds < 900:  # 15 min lockout
+            if attempts >= 5 and (datetime.now(timezone.utc) - last_attempt).seconds < 900:  # 15 min lockout
                 raise ValueError("Account locked due to too many failed attempts")
                 
         conn = sqlite3.connect("qenex_auth.db")
@@ -600,7 +604,7 @@ class AuthenticationSystem:
         # Create session
         session_id = str(uuid.uuid4())
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(hours=8)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=8)
         
         cursor.execute('''
             INSERT INTO sessions (
@@ -608,12 +612,12 @@ class AuthenticationSystem:
             ) VALUES (?, ?, ?, ?, ?)
         ''', (
             session_id, user_id, token,
-            datetime.utcnow().isoformat(), expires_at.isoformat()
+            datetime.now(timezone.utc).isoformat(), expires_at.isoformat()
         ))
         
         cursor.execute('''
             UPDATE users SET last_login = ? WHERE id = ?
-        ''', (datetime.utcnow().isoformat(), user_id))
+        ''', (datetime.now(timezone.utc).isoformat(), user_id))
         
         conn.commit()
         conn.close()
@@ -625,9 +629,9 @@ class AuthenticationSystem:
         """Record failed login attempt"""
         if username in self.failed_attempts:
             attempts, _ = self.failed_attempts[username]
-            self.failed_attempts[username] = (attempts + 1, datetime.utcnow())
+            self.failed_attempts[username] = (attempts + 1, datetime.now(timezone.utc))
         else:
-            self.failed_attempts[username] = (1, datetime.utcnow())
+            self.failed_attempts[username] = (1, datetime.now(timezone.utc))
             
     async def validate_token(self, token: str) -> Optional[str]:
         """Validate session token"""
@@ -648,7 +652,7 @@ class AuthenticationSystem:
             
         user_id, expires_at = session
         
-        if datetime.fromisoformat(expires_at) < datetime.utcnow():
+        if datetime.fromisoformat(expires_at) < datetime.now(timezone.utc):
             return None
             
         return user_id
