@@ -1,50 +1,131 @@
 version: '3.9'
 
 services:
-  # Main application
-  app:
+  # Main QENEX Banking Node 1 (Leader)
+  qenex-node-1:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: qenex-app
+    container_name: qenex-banking-node-1
     restart: unless-stopped
+    environment:
+      - NODE_ID=1
+      - NODE_ROLE=leader
+      - DATABASE_URL=postgresql://qenex:${DB_PASSWORD}@postgres:5432/qenex_banking
+      - REDIS_URL=redis://redis:6379
+      - CLUSTER_PEERS=qenex-node-2:8080,qenex-node-3:8080
+      - LOG_LEVEL=info
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     ports:
       - "8080:8080"
-      - "8443:8443"
-    environment:
-      - APP_ENV=production
-      - DATABASE_URL=postgresql://qenex:${DB_PASSWORD}@postgres:5432/qenex
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-    volumes:
-      - app_data:/app/data
-      - app_logs:/app/logs
+      - "9090:9090"  # Prometheus metrics
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./data/node1:/app/data
+      - ./logs:/app/logs
     networks:
       - qenex_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  # PostgreSQL database
+  # Banking Node 2 (Follower)
+  qenex-node-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qenex-banking-node-2
+    restart: unless-stopped
+    environment:
+      - NODE_ID=2
+      - NODE_ROLE=follower
+      - DATABASE_URL=postgresql://qenex:${DB_PASSWORD}@postgres:5432/qenex_banking
+      - REDIS_URL=redis://redis:6379
+      - CLUSTER_PEERS=qenex-node-1:8080,qenex-node-3:8080
+      - LOG_LEVEL=info
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ports:
+      - "8081:8080"
+      - "9091:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/node2:/app/data
+      - ./logs:/app/logs
+    networks:
+      - qenex_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Banking Node 3 (Follower)
+  qenex-node-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qenex-banking-node-3
+    restart: unless-stopped
+    environment:
+      - NODE_ID=3
+      - NODE_ROLE=follower
+      - DATABASE_URL=postgresql://qenex:${DB_PASSWORD}@postgres:5432/qenex_banking
+      - REDIS_URL=redis://redis:6379
+      - CLUSTER_PEERS=qenex-node-1:8080,qenex-node-2:8080
+      - LOG_LEVEL=info
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    ports:
+      - "8082:8080"
+      - "9092:9090"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data/node3:/app/data
+      - ./logs:/app/logs
+    networks:
+      - qenex_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
   postgres:
-    image: postgres:14-alpine
+    image: postgres:15-alpine
     container_name: qenex-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=qenex
+      - POSTGRES_DB=qenex_banking
       - POSTGRES_USER=qenex
       - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U qenex"]
+      test: ["CMD-SHELL", "pg_isready -U qenex -d qenex_banking"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - qenex_network
+    command: postgres -c max_connections=200 -c shared_buffers=256MB -c effective_cache_size=1GB
 
   # Redis cache
   redis:
