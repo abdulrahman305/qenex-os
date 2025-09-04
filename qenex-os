@@ -11,13 +11,22 @@ import time
 from pathlib import Path
 
 # Add core modules to path
-sys.path.insert(0, str(Path(__file__).parent / "core"))
+core_path = Path(__file__).parent / "core"
+if not core_path.exists():
+    # Support installation in /opt/qenex-os
+    core_path = Path("/opt/qenex-os/core")
+sys.path.insert(0, str(core_path.parent))
 
-from ai.ai_engine import ai_engine
-from system.kernel import kernel
-from security.security_manager import security_manager
-from network.network_stack import network_stack
-from defi.defi_integration import defi_integration
+try:
+    from core.ai.ai_engine import ai_engine, AITask
+    from core.system.kernel import kernel
+    from core.security.security_manager import security_manager
+    from core.network.network_stack import network_stack
+    from core.defi.defi_integration import defi_integration
+except ImportError as e:
+    print(f"Error importing modules: {e}")
+    print("Please run 'sudo ./install.sh' first")
+    sys.exit(1)
 
 class QenexOSCLI:
     """QENEX OS Command Line Interface"""
@@ -132,7 +141,6 @@ class QenexOSCLI:
                     break
                 
                 # Process with AI
-                from ai.ai_engine import AITask
                 task = AITask(
                     task_id=f"user_{int(time.time())}",
                     task_type="analysis",

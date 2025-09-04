@@ -43,10 +43,27 @@ check_requirements() {
         exit 1
     fi
     
+    # Check for bc command (required for version comparison)
+    if ! command -v bc &> /dev/null; then
+        print_info "Installing bc for version comparison..."
+        if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            apt-get update && apt-get install -y bc 2>/dev/null || yum install -y bc 2>/dev/null
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            brew install bc 2>/dev/null || true
+        fi
+    fi
+    
     python_version=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
     required_version="3.8"
     
-    if [[ $(echo "$python_version < $required_version" | bc) -eq 1 ]]; then
+    # Use awk for version comparison if bc is not available
+    if command -v bc &> /dev/null; then
+        version_check=$(echo "$python_version < $required_version" | bc)
+    else
+        version_check=$(awk -v v1="$python_version" -v v2="$required_version" 'BEGIN{print (v1<v2)?1:0}')
+    fi
+    
+    if [[ $version_check -eq 1 ]]; then
         print_error "Python $required_version or higher is required (found $python_version)"
         exit 1
     fi

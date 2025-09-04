@@ -213,7 +213,8 @@ class DeFiIntegration:
         pool = self.liquidity_pools[pool_id]
         pool["reserve_a"] += amount_a
         pool["reserve_b"] += amount_b
-        pool["user_share"] += (amount_a * amount_b).sqrt()  # Simplified LP token calculation
+        # Simplified LP token calculation using approximation
+        pool["user_share"] += (amount_a * amount_b) ** Decimal('0.5')
         
         print(f"✅ Added liquidity to {pool_id} pool")
         return pool_id

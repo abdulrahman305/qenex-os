@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qenex-os"
+version = "1.0.0"
+authors = [
+    {name = "QENEX Team", email = "support@qenex.ai"}
+]
+description = "QENEX OS - Unified AI Operating System"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "aiohttp>=3.8.0",
+    "cryptography>=41.0.0",
+    "numpy>=1.24.0",
+    "psutil>=5.9.0",
+    "pyyaml>=6.0",
+    "requests>=2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+full = [
+    "web3>=6.0.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/abdulrahman305/qenex-os"
+Documentation = "https://docs.qenex.ai"
+Repository = "https://github.com/abdulrahman305/qenex-os.git"
+Issues = "https://github.com/abdulrahman305/qenex-os/issues"
+
+[tool.setuptools]
+packages = ["core", "core.ai", "core.system", "core.security", "core.network", "core.defi"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
