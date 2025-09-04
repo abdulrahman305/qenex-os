@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""
+QENEX OS Command Line Interface
+"""
+
+import argparse
+import asyncio
+import json
+import sys
+import time
+from pathlib import Path
+
+# Add core modules to path
+sys.path.insert(0, str(Path(__file__).parent / "core"))
+
+from ai.ai_engine import ai_engine
+from system.kernel import kernel
+from security.security_manager import security_manager
+from network.network_stack import network_stack
+from defi.defi_integration import defi_integration
+
+class QenexOSCLI:
+    """QENEX OS Command Line Interface"""
+    
+    def __init__(self):
+        self.commands = {
+            "start": self.start_system,
+            "stop": self.stop_system,
+            "status": self.show_status,
+            "ai": self.ai_command,
+            "monitor": self.monitor_system,
+            "init": self.initialize_system,
+            "security": self.security_command,
+            "network": self.network_command,
+            "defi": self.defi_command
+        }
+    
+    async def start_system(self, args):
+        """Start QENEX OS"""
+        print("🚀 Starting QENEX OS...")
+        
+        # Boot kernel
+        await kernel.boot()
+        
+        # Start AI engine
+        await ai_engine.start()
+        
+        # Initialize security
+        await security_manager.initialize()
+        
+        # Start network stack
+        await network_stack.start()
+        
+        # Initialize DeFi integration
+        await defi_integration.initialize()
+        
+        print("✅ QENEX OS started successfully")
+        
+        # Keep running
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            await self.stop_system(args)
+    
+    async def stop_system(self, args):
+        """Stop QENEX OS"""
+        print("🔴 Stopping QENEX OS...")
+        
+        await ai_engine.stop()
+        await security_manager.shutdown()
+        await network_stack.stop()
+        await defi_integration.shutdown()
+        await kernel.shutdown()
+        
+        print("✅ QENEX OS stopped")
+    
+    async def show_status(self, args):
+        """Show system status"""
+        print("\n" + "="*50)
+        print("         QENEX OS SYSTEM STATUS")
+        print("="*50)
+        
+        # Kernel status
+        kernel_info = kernel.get_system_info()
+        print(f"\n🖥️  Kernel v{kernel_info['kernel_version']}")
+        print(f"   Uptime: {kernel_info['uptime']:.2f} seconds")
+        print(f"   Processes: {kernel_info['processes']}")
+        
+        # AI Engine status
+        ai_status = ai_engine.get_status()
+        print(f"\n🤖 AI Engine")
+        print(f"   Status: {'Running' if ai_status['running'] else 'Stopped'}")
+        print(f"   Tasks Processed: {ai_status['metrics']['tasks_processed']}")
+        print(f"   Patterns Learned: {ai_status['patterns_learned']}")
+        
+        # System resources
+        print(f"\n💻 System Resources")
+        print(f"   CPU: {kernel_info['cpu']['percent']}%")
+        print(f"   Memory: {kernel_info['memory']['percent']:.1f}%")
+        print(f"   Disk: {kernel_info['disk']['percent']:.1f}%")
+        
+        # Security status
+        security_status = security_manager.get_status()
+        print(f"\n🔒 Security")
+        print(f"   Status: {security_status['status']}")
+        print(f"   Threat Level: {security_status['threat_level']}")
+        
+        # Network status
+        network_status = network_stack.get_status()
+        print(f"\n🌐 Network")
+        print(f"   Status: {network_status['status']}")
+        print(f"   Connections: {network_status['connections']}")
+        
+        # DeFi status
+        defi_status = defi_integration.get_status()
+        print(f"\n💰 DeFi Integration")
+        print(f"   Status: {defi_status['status']}")
+        print(f"   Wallet Connected: {defi_status['wallet_connected']}")
+        
+        print("="*50 + "\n")
+    
+    async def ai_command(self, args):
+        """AI-related commands"""
+        if args.assist:
+            print("🤖 AI Assistant activated")
+            print("Type your query (or 'exit' to quit):")
+            
+            while True:
+                query = input("> ")
+                if query.lower() == 'exit':
+                    break
+                
+                # Process with AI
+                from ai.ai_engine import AITask
+                task = AITask(
+                    task_id=f"user_{int(time.time())}",
+                    task_type="analysis",
+                    priority=1,
+                    data={"query": query},
+                    created_at=time.time()
+                )
+                
+                result = await ai_engine.process_task(task)
+                print(f"AI Response: {json.dumps(result, indent=2)}")
+        
+        elif args.train:
+            print("🧠 Training AI model...")
+            # Trigger AI training
+            await ai_engine.optimization_loop()
+            print("✅ AI training completed")
+    
+    async def monitor_system(self, args):
+        """Monitor system in real-time"""
+        print("📊 System Monitor (Press Ctrl+C to exit)")
+        print("-" * 50)
+        
+        try:
+            while True:
+                info = kernel.get_system_info()
+                
+                # Clear and update display
+                print("\033[H\033[J")  # Clear screen
+                print("📊 QENEX OS System Monitor")
+                print("-" * 50)
+                print(f"CPU:    {info['cpu']['percent']:5.1f}% " + "█" * int(info['cpu']['percent'] / 5))
+                print(f"Memory: {info['memory']['percent']:5.1f}% " + "█" * int(info['memory']['percent'] / 5))
+                print(f"Disk:   {info['disk']['percent']:5.1f}% " + "█" * int(info['disk']['percent'] / 5))
+                print(f"Uptime: {info['uptime']:.0f}s")
+                print("-" * 50)
+                
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("\n✅ Monitor stopped")
+    
+    async def initialize_system(self, args):
+        """Initialize QENEX OS"""
+        print("🔧 Initializing QENEX OS...")
+        
+        # Create necessary directories
+        from pathlib import Path
+        dirs = [
+            "fs", "logs", "config", "cache", 
+            "data", "tmp", "var/run", "var/log"
+        ]
+        
+        for dir_path in dirs:
+            Path(dir_path).mkdir(parents=True, exist_ok=True)
+        
+        # Create default configuration
+        config = {
+            "version": "1.0.0",
+            "ai_enabled": True,
+            "security_level": "maximum",
+            "network": {
+                "blockchain_sync": True,
+                "defi_integration": True
+            }
+        }
+        
+        with open("config/system.json", "w") as f:
+            json.dump(config, f, indent=2)
+        
+        print("✅ QENEX OS initialized successfully")
+    
+    async def security_command(self, args):
+        """Security-related commands"""
+        if args.scan:
+            print("🔍 Running security scan...")
+            threats = await security_manager.scan_system()
+            print(f"Threats detected: {len(threats)}")
+            for threat in threats:
+                print(f"  - {threat}")
+        
+        elif args.update:
+            print("🔒 Updating security definitions...")
+            await security_manager.update_definitions()
+            print("✅ Security definitions updated")
+    
+    async def network_command(self, args):
+        """Network-related commands"""
+        if args.connect:
+            print(f"🌐 Connecting to {args.connect}...")
+            success = await network_stack.connect(args.connect)
+            if success:
+                print("✅ Connected successfully")
+            else:
+                print("❌ Connection failed")
+        
+        elif args.status:
+            status = network_stack.get_status()
+            print(f"Network Status: {json.dumps(status, indent=2)}")
+    
+    async def defi_command(self, args):
+        """DeFi-related commands"""
+        if args.wallet:
+            print("💰 Wallet Status:")
+            balance = await defi_integration.get_balance()
+            print(f"  QXC Balance: {balance}")
+        
+        elif args.stake:
+            print(f"🎯 Staking {args.stake} QXC...")
+            success = await defi_integration.stake(float(args.stake))
+            if success:
+                print("✅ Staking successful")
+            else:
+                print("❌ Staking failed")
+
+def main():
+    """Main entry point"""
+    parser = argparse.ArgumentParser(description="QENEX OS Command Line Interface")
+    parser.add_argument("command", choices=["start", "stop", "status", "ai", "monitor", "init", "security", "network", "defi"],
+                       help="Command to execute")
+    
+    # AI subcommands
+    parser.add_argument("--assist", action="store_true", help="Start AI assistant")
+    parser.add_argument("--train", action="store_true", help="Train AI model")
+    
+    # Security subcommands
+    parser.add_argument("--scan", action="store_true", help="Run security scan")
+    parser.add_argument("--update", action="store_true", help="Update security definitions")
+    
+    # Network subcommands
+    parser.add_argument("--connect", type=str, help="Connect to network")
+    
+    # DeFi subcommands
+    parser.add_argument("--wallet", action="store_true", help="Show wallet status")
+    parser.add_argument("--stake", type=float, help="Stake QXC tokens")
+    
+    args = parser.parse_args()
+    
+    cli = QenexOSCLI()
+    
+    if args.command in cli.commands:
+        asyncio.run(cli.commands[args.command](args))
+    else:
+        print(f"Unknown command: {args.command}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
