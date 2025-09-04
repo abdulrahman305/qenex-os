@@ -400,13 +400,13 @@ cargo run --bin security-test -- --scan-vulnerabilities
 
 ### Commercial Licensing
 For commercial use, enterprise support, and consulting services:
-- **Email**: enterprise@qenex.ai
+- **Email**: cto@qenex.ai
 - **Phone**: +1 (555) QENEX-OS
 - **Website**: https://www.qenex.ai
 
 ## 🛡️ Security Disclosure
 
-For security vulnerabilities, please email: security@qenex.ai
+For security vulnerabilities, please email: cto@qenex.ai
 
 We follow responsible disclosure practices and will respond within 24 hours.
 
