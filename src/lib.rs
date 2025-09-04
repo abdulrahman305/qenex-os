@@ -14,6 +14,9 @@ pub mod ai;
 pub mod protocols;
 pub mod cluster;
 pub mod testing;
+pub mod kernel;
+pub mod crypto;
+pub mod transaction;
 
 pub use core::{BankingCore, SystemConfig, SystemHealth, CoreError, Result};
 

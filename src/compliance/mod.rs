@@ -1,3 +1,5 @@
+pub mod live_feeds;
+
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
@@ -5,6 +7,16 @@ use uuid::Uuid;
 use tokio::sync::RwLock;
 use sqlx::PgPool;
 use std::sync::Arc;
+
+pub use live_feeds::{
+    LiveComplianceSystem,
+    LiveComplianceConfig,
+    ScreeningResult,
+    ComplianceMatch,
+    ScreeningRecommendation,
+    EntityType,
+    RiskLevel,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceRule {
