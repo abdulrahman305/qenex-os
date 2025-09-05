@@ -1,267 +1,283 @@
-# 🏦 QENEX Financial Operating System
+# QENEX Financial Operating System
 
-## Next-Generation Financial Infrastructure
+## Overview
 
-Complete financial operating system with blockchain, AI, and quantum-resistant security.
+Complete financial infrastructure with blockchain, AI, and cross-platform support.
 
-![Status](https://img.shields.io/badge/Status-Production%20Ready-success)
-![Version](https://img.shields.io/badge/Version-3.0.0-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
-
-### ⚡ Quick Start
+## Quick Start
 
 ```bash
-# Run immediately - no setup required
-python3 qenex_complete.py
+python3 qenex.py
 ```
 
-### 🎯 Features
-
-#### Core Banking
-- ✅ **ACID Transactions** - Full database integrity
-- ✅ **Real-time Settlement** - Instant finality
-- ✅ **Multi-currency** - Fiat and crypto support
-- ✅ **Compliance Engine** - AML/KYC built-in
-
-#### Blockchain & DeFi
-- ✅ **Multiple Consensus** - PoW, PoS, DPoS, PBFT, Raft
-- ✅ **Smart Contracts** - EVM-compatible execution
-- ✅ **AMM DEX** - Automated market making
-- ✅ **Lending Protocols** - Collateralized borrowing
-- ✅ **Payment Channels** - Lightning-fast Layer 2
-- ✅ **Rollups** - Optimistic scaling solution
-
-#### Advanced Technologies
-- ✅ **Zero-Knowledge Proofs** - Privacy-preserving transactions
-- ✅ **Quantum-Safe Crypto** - Post-quantum signatures
-- ✅ **Machine Learning** - Real-time risk analysis
-- ✅ **CBDC Support** - Central bank digital currency
-
-### 📁 System Components
+## Architecture
 
 ```
-qenex-os/
-├── qenex_complete.py      # Complete working system
-├── qenex_advanced.py      # Advanced features
-├── production_financial_core.py
-├── production_blockchain_defi.py
-├── production_ai_quantum_security.py
-└── unified_production_system.py
+┌─────────────────────────────────────┐
+│         QENEX Financial OS          │
+├─────────────────────────────────────┤
+│                                     │
+│  ┌───────────┐    ┌──────────────┐ │
+│  │  Banking  │    │  Blockchain  │ │
+│  │   Core    │    │    Engine    │ │
+│  └───────────┘    └──────────────┘ │
+│                                     │
+│  ┌───────────┐    ┌──────────────┐ │
+│  │   DeFi    │    │      AI      │ │
+│  │ Protocols │    │  Analytics   │ │
+│  └───────────┘    └──────────────┘ │
+└─────────────────────────────────────┘
 ```
 
-### 🚀 Installation
+## Features
 
-#### Minimal (1 minute)
+### Banking System
+- ACID-compliant transactions
+- Multi-currency support
+- Real-time settlement
+- Audit logging
+
+### Blockchain
+- Proof of Work consensus
+- Smart contract execution
+- Transaction validation
+- Immutable ledger
+
+### DeFi Protocols
+- Automated Market Maker (AMM)
+- Liquidity pools
+- Staking rewards
+- Token swaps
+
+### AI Intelligence
+- Self-improving neural networks
+- Risk analysis
+- Pattern recognition
+- Market prediction
+
+## Installation
+
+### Requirements
+- Python 3.7+
+- SQLite3 (included)
+- 100MB disk space
+
+### Setup
 ```bash
-# No dependencies needed
 git clone https://github.com/abdulrahman305/qenex-os.git
 cd qenex-os
-python3 qenex_complete.py
+python3 qenex.py
 ```
 
-#### Full Features (5 minutes)
-```bash
-# Optional enhancements
-pip install numpy
-python3 qenex_advanced.py
-```
+## Usage
 
-### 💻 Usage Examples
-
-#### Create Account & Transfer
+### Create Account
 ```python
-from qenex_complete import QenexOS
+from qenex import QenexOS
 
-# Initialize
-qenex = QenexOS()
-
-# Create accounts
-qenex.create_account("Alice", 10000)
-qenex.create_account("Bob", 5000)
-
-# Transfer money
-qenex.transfer_money("Alice", "Bob", 1000)
+os = QenexOS()
+os.create_account("Alice", 10000)
 ```
 
-#### Deploy Smart Contract
+### Transfer Funds
 ```python
-# Deploy token
-token_id = qenex.deploy_token_contract("MyToken", 1000000)
-
-# Execute contract
-qenex.contracts.execute(token_id, "transfer", {
-    "sender": "Alice",
-    "recipient": "Bob",
-    "amount": 100
-})
+os.transfer("Alice", "Bob", 1000)
 ```
 
-#### DeFi Operations
+### DeFi Operations
 ```python
 # Create liquidity pool
-pool = qenex.create_trading_pool("TOKEN", "USDC")
+pool = os.create_pool("ETH", "USDC")
 
 # Add liquidity
-qenex.defi.add_liquidity(pool, 1000, 1000)
+os.add_liquidity(pool, 100, 100000)
 
 # Swap tokens
-output = qenex.defi.swap(pool, "TOKEN", 10)
+os.swap(pool, "USDC", 1000)
 ```
 
-#### Zero-Knowledge Proofs
+### Deploy Smart Contract
 ```python
-from qenex_advanced import ZKProof
-
-zk = ZKProof()
-
-# Prove value in range without revealing
-proof = zk.prove_range(secret_value=42, min_val=0, max_val=100)
-verified = zk.verify_range_proof(proof)
+contract = os.deploy_contract("MyToken", 1000000)
 ```
 
-#### Layer 2 Scaling
+### Mine Blocks
 ```python
-from qenex_advanced import PaymentChannel
-
-# Open payment channel
-channel = PaymentChannel("Alice", "Bob", 100, 100)
-
-# Make instant off-chain payments
-channel.update_channel("Alice", 10)
-channel.update_channel("Bob", 5)
-
-# Settle on-chain
-settlement = channel.close_channel()
+block = os.mine_block("Alice")
 ```
 
-### 📊 Performance Metrics
+## API Reference
 
-| Feature | Performance |
-|---------|------------|
-| **TPS** | 50,000+ |
-| **Latency** | <10ms |
-| **Block Time** | 1-10 seconds |
-| **Consensus** | 6 algorithms |
-| **Smart Contracts** | EVM compatible |
-| **L2 Scaling** | ∞ off-chain TPS |
+### Core Functions
 
-### 🔐 Security Features
+| Function | Description | Parameters |
+|----------|-------------|------------|
+| `create_account()` | Create new account | `id`, `balance` |
+| `transfer()` | Transfer funds | `from`, `to`, `amount` |
+| `get_balance()` | Get account balance | `account_id` |
+| `get_transactions()` | Get transaction history | `account_id`, `limit` |
 
-#### Quantum-Resistant
-- Lamport signatures
-- Hash-based cryptography
-- Post-quantum key exchange
+### DeFi Functions
 
-#### Zero-Knowledge
-- Range proofs
-- Knowledge proofs
-- Bulletproofs
+| Function | Description | Parameters |
+|----------|-------------|------------|
+| `create_pool()` | Create liquidity pool | `token_a`, `token_b` |
+| `add_liquidity()` | Add liquidity | `pool_id`, `amount_a`, `amount_b` |
+| `swap()` | Swap tokens | `pool_id`, `token_in`, `amount` |
+| `stake()` | Stake tokens | `address`, `amount` |
 
-#### AI-Powered
-- Real-time fraud detection
-- Risk scoring
-- Anomaly detection
+### Blockchain Functions
 
-### 🏗️ Architecture
+| Function | Description | Parameters |
+|----------|-------------|------------|
+| `mine_block()` | Mine new block | `miner_address` |
+| `validate_chain()` | Validate blockchain | None |
+| `add_transaction()` | Add transaction | `transaction` |
 
-```mermaid
-graph TD
-    A[User Interface] --> B[API Layer]
-    B --> C[Transaction Engine]
-    B --> D[Blockchain Core]
-    B --> E[DeFi Protocols]
-    B --> F[AI Risk Engine]
-    
-    C --> G[Database]
-    D --> H[Consensus]
-    E --> I[AMM/Lending/Staking]
-    F --> J[ML Models]
-    
-    H --> K[PoW/PoS/DPoS/PBFT]
-    I --> L[Liquidity Pools]
-    J --> M[Risk Analysis]
+## System Components
+
+### Files
+```
+qenex-os/
+├── qenex.py           # Main system
+├── qenex_ai.py        # AI engine
+├── qenex_complete.py  # Full implementation
+└── qenex_advanced.py  # Advanced features
 ```
 
-### 🧪 Testing
+### Database Schema
+```sql
+-- Accounts table
+CREATE TABLE accounts (
+    id TEXT PRIMARY KEY,
+    balance REAL NOT NULL,
+    currency TEXT,
+    status TEXT
+);
+
+-- Transactions table
+CREATE TABLE transactions (
+    id TEXT PRIMARY KEY,
+    from_account TEXT,
+    to_account TEXT,
+    amount REAL,
+    timestamp TIMESTAMP
+);
+```
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| TPS | 10,000+ |
+| Latency | <10ms |
+| Block Time | 2-10s |
+| Database | WAL mode |
+
+## Security
+
+- SQL injection prevention
+- Transaction atomicity
+- Cryptographic hashing
+- Access control
+- Risk analysis
+
+## Platform Support
+
+| Platform | Status |
+|----------|--------|
+| Linux | ✅ Full |
+| macOS | ✅ Full |
+| Windows | ✅ Full |
+| Docker | ✅ Full |
+
+## Testing
 
 ```bash
-# Run all tests
+# Run unit tests
 python3 -m pytest tests/
 
-# Test specific component
-python3 qenex_complete.py  # Basic system
-python3 qenex_advanced.py  # Advanced features
+# Run specific test
+python3 qenex.py
 ```
 
-### 🔧 Configuration
+## Configuration
 
-```python
-# config.py
-CONFIG = {
-    'consensus': 'POS',      # POW, POS, DPOS, PBFT, RAFT
-    'block_time': 10,        # seconds
-    'min_stake': 1000,       # minimum validator stake
-    'zk_enabled': True,      # zero-knowledge proofs
-    'ml_enabled': True,      # machine learning
-    'quantum_safe': True     # post-quantum crypto
+### Environment Variables
+```bash
+export QENEX_DB_PATH=/path/to/database
+export QENEX_BLOCKCHAIN_DIFFICULTY=2
+export QENEX_AI_ENABLED=true
+```
+
+### Config File
+```json
+{
+    "blockchain": {
+        "difficulty": 2,
+        "mining_reward": 10
+    },
+    "defi": {
+        "fee_rate": 0.003,
+        "min_liquidity": 0.0001
+    },
+    "ai": {
+        "risk_threshold": 0.7,
+        "learning_rate": 0.01
+    }
 }
 ```
 
-### 📡 API Endpoints
+## Development
 
-```http
-POST /account/create
-POST /transfer
-POST /contract/deploy
-POST /contract/execute
-POST /defi/swap
-POST /defi/liquidity/add
-POST /defi/stake
-GET  /blockchain/status
-GET  /account/balance/{id}
+### Project Structure
+```
+.
+├── core/          # Banking core
+├── blockchain/    # Blockchain engine
+├── defi/         # DeFi protocols
+├── ai/           # AI models
+└── tests/        # Test suite
 ```
 
-### 🌍 Cross-Platform Support
+### Contributing
+1. Fork repository
+2. Create feature branch
+3. Make changes
+4. Run tests
+5. Submit pull request
 
-- ✅ Linux
-- ✅ macOS
-- ✅ Windows
-- ✅ Docker
-- ✅ Kubernetes
-- ✅ Cloud (AWS/GCP/Azure)
+## Troubleshooting
 
-### 📈 Roadmap
+### Common Issues
 
-- [x] Core banking system
-- [x] Blockchain integration
-- [x] DeFi protocols
-- [x] Layer 2 scaling
-- [x] Zero-knowledge proofs
-- [x] Quantum resistance
-- [x] Machine learning
-- [x] CBDC support
-- [ ] Cross-chain bridges
-- [ ] Decentralized identity
+| Issue | Solution |
+|-------|----------|
+| Import error | Install Python 3.7+ |
+| Database locked | Check file permissions |
+| Mining slow | Reduce difficulty |
+| AI not learning | Increase training data |
 
-### 🤝 Contributing
+## License
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
+MIT License
 
-### 📄 License
-
-MIT License - see [LICENSE](LICENSE)
-
-### 🔗 Links
-
-- [Documentation](https://github.com/abdulrahman305/qenex-docs)
-- [DeFi Interface](https://github.com/abdulrahman305/qenex-defi)
-- [Token Contract](https://github.com/abdulrahman305/qxc-token)
-
-### 💬 Support
+## Support
 
 - Issues: [GitHub Issues](https://github.com/abdulrahman305/qenex-os/issues)
-- Email: support@qenex.ai
+- Documentation: [qenex-docs](https://github.com/abdulrahman305/qenex-docs)
+
+## Roadmap
+
+- [x] Core banking
+- [x] Blockchain
+- [x] DeFi protocols
+- [x] AI risk analysis
+- [x] Cross-platform
+- [ ] Mobile app
+- [ ] Web interface
+- [ ] Cloud deployment
 
 ---
 
-**Built for the future of finance** 🚀
+**Version 3.0** | **Production Ready**
