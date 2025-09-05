@@ -238,7 +238,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Support
 
-For support, email support@qenex.ai or visit our documentation at https://docs.qenex.ai
+For support, email ceo@qenex.ai or visit our documentation at https://qenex.ai
 
 ## Acknowledgments
 
