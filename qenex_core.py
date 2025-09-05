@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-QENEX Financial Operating System - Production Implementation
-Real, working code with actual functionality
+QENEX Core - Unified Financial Operating System
+Zero-dependency, cross-platform financial infrastructure
 """
 
 import os
