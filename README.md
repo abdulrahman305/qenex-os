@@ -1,37 +1,109 @@
-# QENEX - Unified Financial Operating System
+# QENEX Financial Operating System
 
-[![Version](https://img.shields.io/badge/version-10.0.0-blue.svg)](https://github.com/abdulrahman305/qenex-os)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/abdulrahman305/qenex-os/actions)
-[![Security](https://img.shields.io/badge/security-A+-brightgreen.svg)](https://github.com/abdulrahman305/qenex-os/security)
-[![Performance](https://img.shields.io/badge/performance-100%25-brightgreen.svg)](docs/benchmarks)
-[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](docs/coverage)
+## Enterprise-Grade Financial Infrastructure Platform
 
-## Overview
+QENEX OS is a comprehensive, cross-platform financial operating system designed to revolutionize digital finance through advanced blockchain technology, artificial intelligence, and quantum-resistant cryptography.
 
-QENEX is a revolutionary financial operating system that seamlessly integrates blockchain technology, artificial intelligence, and cross-platform compatibility to solve current and future challenges in global financial systems. Built with self-improving AI capabilities and institutional-grade security, QENEX provides a complete infrastructure for any financial entity, eliminating all obstacles in traditional and digital finance.
+### 🏗️ Architecture Overview
 
-## Key Features
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      QENEX FINANCIAL OS                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Frontend   │  │     API      │  │   Mobile     │      │
+│  │   Interface  │  │   Gateway    │  │     Apps     │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         │                  │                  │              │
+│  ┌──────┴──────────────────┴──────────────────┴──────┐      │
+│  │              Application Service Layer              │      │
+│  ├─────────────────────────────────────────────────────┤      │
+│  │  • Banking Services    • DeFi Protocols            │      │
+│  │  • Payment Processing  • Smart Contracts           │      │
+│  │  • Risk Management     • Compliance Engine         │      │
+│  └─────────────────────────┬───────────────────────────┘      │
+│                            │                                   │
+│  ┌─────────────────────────┴───────────────────────────┐      │
+│  │                 Core Financial Engine                │      │
+│  ├───────────────────────────────────────────────────────┤      │
+│  │  • Transaction Processing  • Account Management      │      │
+│  │  • Settlement Engine       • Liquidity Management    │      │
+│  │  • Interest Calculation    • Fee Processing         │      │
+│  └─────────────────────────┬───────────────────────────┘      │
+│                            │                                   │
+│  ┌─────────────────────────┴───────────────────────────┐      │
+│  │               Blockchain Infrastructure              │      │
+│  ├───────────────────────────────────────────────────────┤      │
+│  │  • Distributed Ledger    • Consensus Mechanism      │      │
+│  │  • Smart Contract VM     • State Management         │      │
+│  │  • P2P Network Layer     • Cryptographic Services   │      │
+│  └─────────────────────────┬───────────────────────────┘      │
+│                            │                                   │
+│  ┌─────────────────────────┴───────────────────────────┐      │
+│  │            Security & Compliance Layer               │      │
+│  ├───────────────────────────────────────────────────────┤      │
+│  │  • Quantum-Resistant Crypto  • KYC/AML Engine      │      │
+│  │  • Fraud Detection AI        • Audit Logging        │      │
+│  │  • Access Control            • Data Encryption      │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Core Capabilities
+## ✨ Key Features
 
-- **Universal Cross-Platform Compatibility**: Native support for Windows, Linux, macOS, Android, iOS, Web, and embedded systems
-- **Self-Improving AI**: Autonomous optimization using genetic algorithms, reinforcement learning, and neural architecture search
-- **Advanced DeFi Integration**: Institutional-grade decentralized finance protocols with automated market making and yield optimization
-- **Real-Time Transaction Processing**: Ultra-low latency with throughput exceeding 100,000 TPS
-- **Quantum-Resistant Security**: Post-quantum cryptography and advanced threat protection
-- **Zero-Knowledge Privacy**: Complete transaction privacy while maintaining regulatory compliance
+### 🏦 **Complete Banking Infrastructure**
+- Full-featured account management system
+- Real-time transaction processing
+- Multi-currency support
+- Automated clearing and settlement
+- Comprehensive reporting and analytics
 
-### Innovation Highlights
+### 🔗 **Advanced Blockchain Technology**
+- High-performance distributed ledger
+- Byzantine Fault Tolerant consensus
+- Smart contract execution environment
+- Cross-chain interoperability
+- Layer-2 scaling solutions
 
-- **Autonomous System Optimization**: Continuously learns and improves performance without human intervention
-- **Universal Financial Protocols**: Single API for all financial operations across traditional and DeFi systems
-- **Predictive Risk Management**: AI-driven risk assessment with 99.9% accuracy
-- **Self-Healing Architecture**: Automatic error detection and recovery
-- **Energy-Efficient Consensus**: 99% reduction in energy consumption compared to traditional blockchains
+### 🤖 **Artificial Intelligence Integration**
+- Predictive risk assessment
+- Fraud detection and prevention
+- Automated compliance monitoring
+- Market analysis and forecasting
+- Customer behavior analytics
 
+### 🔐 **Enterprise Security**
+- Quantum-resistant cryptography
+- Hardware security module integration
+- Multi-factor authentication
+- End-to-end encryption
+- Zero-knowledge proofs
 
-## Quick Start
+### 📊 **DeFi Protocol Suite**
+- Automated Market Making (AMM)
+- Lending and borrowing protocols
+- Yield farming mechanisms
+- Liquidity provision
+- Flash loan capabilities
+
+### 🌍 **Global Compliance**
+- KYC/AML integration
+- Regulatory reporting
+- Multi-jurisdiction support
+- Audit trail management
+- Real-time compliance monitoring
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.9+
+- Node.js 16+
+- Docker 20+
+- PostgreSQL 14+ (optional, for production)
+- Redis 6+ (optional, for caching)
 
 ### Installation
 
@@ -42,12 +114,19 @@ cd qenex-os
 
 # Install dependencies
 pip install -r requirements.txt
+npm install
 
 # Initialize the system
-python core/unified_financial_core.py --init
+python install.py --init
 
-# Start QENEX
-python main.py
+# Start the financial engine
+python -m core.financial_engine
+
+# In another terminal, start the blockchain
+python -m core.blockchain_engine
+
+# Start the web interface
+npm run dev
 ```
 
 ### Docker Deployment
