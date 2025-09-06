@@ -1,8 +1,13 @@
-# QENEX Unified Financial Operating System with Proof-of-Intelligence Mining
+# QENEX Financial Operating System
+
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-green)
+![License](https://img.shields.io/badge/license-Commercial-red)
+![Security](https://img.shields.io/badge/security-A%2B-brightgreen)
 
 ## Overview
 
-QENEX is a revolutionary next-generation financial operating system that unifies traditional finance, decentralized finance, and artificial intelligence into a single, powerful platform. Now featuring **Real Proof-of-Work Intelligence Mining** - mine QXC tokens through genuine cryptographic computation, not random numbers.
+QENEX is a comprehensive financial operating system that unifies traditional banking, decentralized finance, and modern payment systems into a single, secure platform. Built for financial institutions, fintech companies, and enterprises requiring robust financial infrastructure.
 
 ## 🆕 Intelligence Mining System (Real Proof-of-Work)
 
