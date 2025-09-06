@@ -1,8 +1,24 @@
-# QENEX Unified Financial Operating System
+# QENEX Unified Financial Operating System with Proof-of-Intelligence Mining
 
 ## Overview
 
-QENEX is a revolutionary next-generation financial operating system that unifies traditional finance, decentralized finance, and artificial intelligence into a single, powerful platform. Built from the ground up for enterprise deployment, QENEX delivers unprecedented performance, security, and reliability for modern financial institutions.
+QENEX is a revolutionary next-generation financial operating system that unifies traditional finance, decentralized finance, and artificial intelligence into a single, powerful platform. Now featuring **Real Proof-of-Work Intelligence Mining** - mine QXC tokens through genuine cryptographic computation, not random numbers.
+
+## 🆕 Intelligence Mining System (Real Proof-of-Work)
+
+### Current Mining Status
+```
+Intelligence Level: 0.160177 / 1000
+QXC Mined: 1581.5940
+Latest Proof: 0000490ce338ec1e... (4 leading zeros required)
+Mining Type: REAL_PROOF_OF_WORK
+```
+
+### Real Mining Features
+- **SHA-256 Proof-of-Work**: Actual computational effort required
+- **Verifiable Proofs**: Every mining action creates cryptographic proof
+- **Floating-Point Precision**: 6 decimals for intelligence, 4 for QXC
+- **Progressive Difficulty**: Scales with intelligence level
 
 ## System Validation Results ✅
 
