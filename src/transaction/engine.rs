@@ -1028,7 +1028,7 @@ impl TransactionEngine {
 
 // Supporting structures and implementations
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionRequest {
     pub transaction_type: TransactionType,
     pub from_account: String,

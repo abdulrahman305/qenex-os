@@ -102,7 +102,7 @@ pub struct OfficialAPIConfig {
 }
 
 /// Regulatory jurisdictions
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RegulatoryJurisdiction {
     UnitedStates,       // OFAC, FATCA, BSA/AML
     EuropeanUnion,      // EU sanctions, AMLD, CRS
@@ -967,7 +967,7 @@ pub enum ScreeningStatus {
     PossibleMatch,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum RequiredAction {
     ManualReview,
     EscalateToCompliance,
