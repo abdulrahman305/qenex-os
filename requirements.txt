@@ -1,18 +1,41 @@
-# QENEX Financial OS Dependencies
-asyncio-mqtt>=0.11.1
+# QENEX Financial OS - Production Dependencies
+
+# Core Runtime
 aiohttp>=3.8.5
 aiofiles>=23.2.1
-asyncpg>=0.28.4
+uvloop>=0.17.0
+asyncio-mqtt>=0.16.1
+
+# Database & Storage
+asyncpg>=0.28.0
 redis>=5.0.0
+sqlalchemy>=2.0.0
+
+# Financial Processing
+python-dateutil>=2.8.2
+pycountry>=22.3.5
+
+# Security & Cryptography
+cryptography>=41.0.4
+pycryptodome>=3.18.0
+argon2-cffi>=21.3.0
+pyotp>=2.9.0
+
+# AI/ML
 numpy>=1.24.3
 pandas>=2.0.3
 scikit-learn>=1.3.0
-tensorflow>=2.13.0
-transformers>=4.33.2
-web3>=6.9.0
-cryptography>=41.0.4
+torch>=2.0.0
+
+# Monitoring
+prometheus-client>=0.17.0
 psutil>=5.9.5
+
+# Networking
 requests>=2.31.0
 websockets>=11.0.3
-optuna>=3.3.0
-joblib>=1.3.2
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+click>=8.1.0
