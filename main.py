@@ -22,17 +22,11 @@ from prometheus_client import start_http_server
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
-try:
-    from core.financial_kernel import FinancialKernel
-    from core.payment_protocols import PaymentGateway
-    from core.ai_engine import FraudDetector, RiskAssessmentEngine, SelfImprovementEngine
-except ImportError:
-    # Fallback imports for existing modules
-    from qenex_unified_core import QenexFinancialOS as FinancialKernel
-    PaymentGateway = None
-    FraudDetector = None
-    RiskAssessmentEngine = None
-    SelfImprovementEngine = None
+from core.financial_kernel import FinancialKernel
+from core.payment_protocols import PaymentGateway
+from core.ai_engine import FraudDetector, RiskAssessmentEngine, SelfImprovementEngine
+from core.security_fortress import SecurityFortress
+from core.performance_optimizer import PerformanceOptimizer
 
 # Configure logging
 logging.basicConfig(
@@ -56,6 +50,10 @@ class QenexFinancialOS:
         self.fraud_detector = None
         self.risk_engine = None
         self.self_improvement = None
+        
+        # Security and performance
+        self.security = None
+        self.performance = None
         
         # Web API
         self.app = web.Application()
@@ -105,28 +103,36 @@ class QenexFinancialOS:
         logger.info("Initializing QENEX Financial OS...")
         
         try:
+            # Initialize security fortress first
+            self.security = SecurityFortress(self.config)
+            await self.security.initialize(None)  # Will need DB pool from kernel
+            logger.info("✓ Security fortress initialized")
+            
+            # Initialize performance optimizer
+            self.performance = PerformanceOptimizer()
+            await self.performance.initialize()
+            logger.info("✓ Performance optimizer initialized")
+            
             # Initialize financial kernel
-            if FinancialKernel:
-                self.kernel = FinancialKernel(self.config)
-                await self.kernel.initialize()
-                logger.info("✓ Financial kernel initialized")
+            self.kernel = FinancialKernel(self.config)
+            await self.kernel.initialize()
+            logger.info("✓ Financial kernel initialized")
             
             # Initialize payment gateway
-            if PaymentGateway:
-                self.payment_gateway = PaymentGateway()
-                await self.payment_gateway.initialize()
-                logger.info("✓ Payment gateway initialized")
+            self.payment_gateway = PaymentGateway(self.config)
+            await self.payment_gateway.initialize()
+            logger.info("✓ Payment gateway initialized")
             
             # Initialize AI components
-            if FraudDetector and self.config['features']['fraud_detection']:
+            if self.config['features']['fraud_detection']:
                 self.fraud_detector = FraudDetector()
                 logger.info("✓ Fraud detection engine initialized")
             
-            if RiskAssessmentEngine and self.config['features']['risk_assessment']:
+            if self.config['features']['risk_assessment']:
                 self.risk_engine = RiskAssessmentEngine()
                 logger.info("✓ Risk assessment engine initialized")
             
-            if SelfImprovementEngine and self.config['features']['self_improvement']:
+            if self.config['features']['self_improvement']:
                 self.self_improvement = SelfImprovementEngine()
                 logger.info("✓ Self-improvement engine initialized")
             
