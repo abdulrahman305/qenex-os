@@ -1,24 +1,36 @@
 #!/usr/bin/env python3
 """
 QENEX Financial Operating System
-Production-ready implementation with all features working
+Autonomous, self-optimizing financial infrastructure
 """
 
-import hashlib
+import asyncio
 import json
-import os
-import sqlite3
+import logging
 import sys
-import threading
-import time
-import uuid
 from datetime import datetime, timezone
-from decimal import Decimal, getcontext
+from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
-# Configure precision for financial calculations
-getcontext().prec = 38
+# Add core directory to path
+sys.path.insert(0, str(Path(__file__).parent))
+
+try:
+    from core.autonomous_kernel import (
+        AutonomousFinancialKernel,
+        SecurityContext,
+        SecurityLevel
+    )
+    from core.financial_kernel import FinancialKernel
+    from core.payment_protocols import PaymentGateway
+    from core.ai_engine import FraudDetector, RiskAssessmentEngine
+except ImportError as e:
+    print(f"Error importing core modules: {e}")
+    print("Please ensure all dependencies are installed")
+    sys.exit(1)
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Core Financial Database
