@@ -42,9 +42,16 @@ import joblib
 import tensorflow as tf
 from transformers import pipeline
 import web3
-from web3.middleware import geth_poa_middleware
-import solcx
-import vyper
+from web3.middleware import ExtraDataToPOAMiddleware
+# Smart contract compilers (optional)
+try:
+    import solcx
+except ImportError:
+    solcx = None
+try:
+    import vyper
+except ImportError:
+    vyper = None
 
 # Set precision for financial calculations
 getcontext().prec = 38
@@ -354,7 +361,7 @@ class BlockchainManager:
             self.w3 = web3.Web3(web3.HTTPProvider(self.config.blockchain_rpc))
             if self.w3.is_connected():
                 # Add PoA middleware for test networks
-                self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+                self.w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
                 logger.info(f"Connected to Ethereum network: {self.w3.eth.chain_id}")
             else:
                 logger.error("Failed to connect to Ethereum network")
