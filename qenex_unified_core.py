@@ -35,14 +35,40 @@ import aiohttp
 import aiofiles
 import asyncpg
 import redis.asyncio as redis
-import numpy as np
-from sklearn.ensemble import IsolationForest, RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import joblib
-import tensorflow as tf
-from transformers import pipeline
-import web3
-from web3.middleware import ExtraDataToPOAMiddleware
+# ML libraries (optional)
+try:
+    import numpy as np
+    from sklearn.ensemble import IsolationForest, RandomForestClassifier
+    from sklearn.preprocessing import StandardScaler
+    ML_AVAILABLE = True
+except ImportError:
+    ML_AVAILABLE = False
+    np = None
+
+try:
+    import joblib
+except ImportError:
+    joblib = None
+
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+    tf = None
+
+try:
+    from transformers import pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+try:
+    import web3
+    from web3.middleware import ExtraDataToPOAMiddleware
+    WEB3_AVAILABLE = True
+except ImportError:
+    WEB3_AVAILABLE = False
+    web3 = None
 # Smart contract compilers (optional)
 try:
     import solcx
@@ -58,13 +84,21 @@ getcontext().prec = 38
 getcontext().rounding = ROUND_DOWN
 
 # Configure logging
+log_handlers = [logging.StreamHandler(sys.stdout)]
+
+# Try to create log file if possible
+log_dir = '/var/log/qenex'
+try:
+    os.makedirs(log_dir, exist_ok=True)
+    log_handlers.append(logging.FileHandler(f'{log_dir}/core.log'))
+except (PermissionError, OSError):
+    # If we can't create the log directory, just use console output
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('/var/log/qenex/core.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=log_handlers
 )
 logger = logging.getLogger(__name__)
 
