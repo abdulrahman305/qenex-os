@@ -32,7 +32,7 @@ from datetime import datetime, timedelta
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMACHMAC
 from cryptography.fernet import Fernet
 import base64
 

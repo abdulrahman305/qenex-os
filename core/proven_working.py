@@ -199,7 +199,7 @@ print("-" * 40)
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2SHA256
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMACSHA256
 from cryptography.hazmat.backends import default_backend
 
 # Test encryption
