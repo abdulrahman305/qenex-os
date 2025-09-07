@@ -1,762 +1,651 @@
 #!/usr/bin/env python3
 """
-QENEX Payment Protocols Implementation
-Support for SWIFT, SEPA, ACH, FedWire, and other payment networks
+QENEX Payment Protocols - Multi-Network Payment Gateway
+Support for SWIFT, SEPA, ACH, FedWire, and Card Networks
 """
 
 import asyncio
 import hashlib
 import json
+import logging
 import re
-import xml.etree.ElementTree as ET
-from dataclasses import dataclass
-from datetime import datetime, timezone
+import secrets
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Tuple
-from uuid import uuid4
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple, Union
+from uuid import UUID, uuid4
 
 import aiohttp
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentNetwork(Enum):
     """Supported payment networks"""
-    SWIFT = auto()
-    SEPA = auto()
-    ACH = auto()
-    FEDWIRE = auto()
-    FASTER_PAYMENTS = auto()
-    RTGS = auto()
-    TARGET2 = auto()
-    CHIPS = auto()
+    SWIFT = "SWIFT"
+    SEPA = "SEPA"
+    ACH = "ACH"
+    FEDWIRE = "FEDWIRE"
+    VISA = "VISA"
+    MASTERCARD = "MASTERCARD"
+    AMEX = "AMEX"
+    INTERNAL = "INTERNAL"
 
 
-class MessageType(Enum):
-    """Payment message types"""
-    # SWIFT Messages
-    MT103 = "Customer Transfer"
-    MT202 = "Bank Transfer"
-    MT202COV = "Cover Payment"
-    MT900 = "Debit Confirmation"
-    MT910 = "Credit Confirmation"
-    MT940 = "Account Statement"
-    MT950 = "Statement Message"
-    
-    # ISO 20022 Messages
-    PAIN001 = "Customer Credit Transfer Initiation"
-    PAIN008 = "Customer Direct Debit Initiation"
-    PACS008 = "Financial Institution Credit Transfer"
-    PACS009 = "Financial Institution Debit Transfer"
-    CAMT053 = "Bank to Customer Statement"
-    CAMT054 = "Bank to Customer Debit/Credit Notification"
+class PaymentStatus(Enum):
+    """Payment processing status"""
+    INITIATED = "INITIATED"
+    VALIDATED = "VALIDATED"
+    PROCESSING = "PROCESSING"
+    CLEARED = "CLEARED"
+    SETTLED = "SETTLED"
+    FAILED = "FAILED"
+    REJECTED = "REJECTED"
+    REVERSED = "REVERSED"
+
+
+class ComplianceLevel(Enum):
+    """Compliance check levels"""
+    STANDARD = "STANDARD"
+    ENHANCED = "ENHANCED"
+    STRICT = "STRICT"
 
 
 @dataclass
-class PaymentMessage:
-    """Universal payment message structure"""
-    id: str
-    network: PaymentNetwork
-    message_type: MessageType
-    sender: str
-    receiver: str
-    amount: Decimal
-    currency: str
-    value_date: datetime
-    reference: str
-    metadata: Dict[str, Any]
-    raw_message: Optional[str] = None
-    signature: Optional[str] = None
+class PaymentInstruction:
+    """Universal payment instruction"""
+    id: UUID = field(default_factory=uuid4)
+    network: PaymentNetwork = PaymentNetwork.INTERNAL
+    source_account: str = ""
+    source_routing: str = ""
+    destination_account: str = ""
+    destination_routing: str = ""
+    amount: Decimal = Decimal("0.00")
+    currency: str = "USD"
+    reference: str = ""
+    message: str = ""
+    status: PaymentStatus = PaymentStatus.INITIATED
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    compliance_data: Dict[str, Any] = field(default_factory=dict)
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary"""
+    def validate(self) -> bool:
+        """Validate payment instruction"""
+        if self.amount <= 0:
+            raise ValueError("Payment amount must be positive")
+        
+        if not self.source_account or not self.destination_account:
+            raise ValueError("Source and destination accounts required")
+            
+        # Network-specific validation
+        if self.network == PaymentNetwork.SWIFT:
+            return self._validate_swift()
+        elif self.network == PaymentNetwork.SEPA:
+            return self._validate_sepa()
+        elif self.network == PaymentNetwork.ACH:
+            return self._validate_ach()
+        elif self.network == PaymentNetwork.FEDWIRE:
+            return self._validate_fedwire()
+            
+        return True
+        
+    def _validate_swift(self) -> bool:
+        """Validate SWIFT payment"""
+        # BIC validation (8 or 11 characters)
+        bic_pattern = r'^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$'
+        if not re.match(bic_pattern, self.source_routing):
+            raise ValueError("Invalid source BIC")
+        if not re.match(bic_pattern, self.destination_routing):
+            raise ValueError("Invalid destination BIC")
+        return True
+        
+    def _validate_sepa(self) -> bool:
+        """Validate SEPA payment"""
+        # IBAN validation
+        iban_pattern = r'^[A-Z]{2}[0-9]{2}[A-Z0-9]+$'
+        if not re.match(iban_pattern, self.destination_account):
+            raise ValueError("Invalid IBAN")
+        
+        # Check SEPA currency
+        if self.currency not in ['EUR']:
+            raise ValueError("SEPA only supports EUR")
+        
+        # Amount limits
+        if self.network == PaymentNetwork.SEPA and self.amount > Decimal("999999999.99"):
+            raise ValueError("SEPA amount exceeds maximum")
+            
+        return True
+        
+    def _validate_ach(self) -> bool:
+        """Validate ACH payment"""
+        # Routing number validation (9 digits)
+        if not re.match(r'^\d{9}$', self.source_routing):
+            raise ValueError("Invalid source routing number")
+        if not re.match(r'^\d{9}$', self.destination_routing):
+            raise ValueError("Invalid destination routing number")
+            
+        # Check ACH currency
+        if self.currency not in ['USD']:
+            raise ValueError("ACH only supports USD")
+            
+        return True
+        
+    def _validate_fedwire(self) -> bool:
+        """Validate FedWire payment"""
+        # Similar to ACH but with different limits
+        if not re.match(r'^\d{9}$', self.destination_routing):
+            raise ValueError("Invalid FedWire routing number")
+            
+        if self.currency not in ['USD']:
+            raise ValueError("FedWire only supports USD")
+            
+        return True
+
+
+class NetworkAdapter:
+    """Base class for network-specific adapters"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.session: Optional[aiohttp.ClientSession] = None
+        
+    async def initialize(self):
+        """Initialize network adapter"""
+        self.session = aiohttp.ClientSession()
+        
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process payment through network"""
+        raise NotImplementedError
+        
+    async def get_status(self, payment_id: str) -> PaymentStatus:
+        """Get payment status from network"""
+        raise NotImplementedError
+        
+    async def close(self):
+        """Close network connections"""
+        if self.session:
+            await self.session.close()
+
+
+class SWIFTAdapter(NetworkAdapter):
+    """SWIFT network adapter"""
+    
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process SWIFT payment"""
+        # Format MT103 message
+        mt103 = self._format_mt103(instruction)
+        
+        # In production, this would connect to SWIFT gateway
+        # For now, simulate processing
+        await asyncio.sleep(0.1)  # Simulate network latency
+        
+        # Log the message
+        logger.info(f"SWIFT MT103 sent: {instruction.id}")
+        
+        return PaymentStatus.PROCESSING
+        
+    def _format_mt103(self, instruction: PaymentInstruction) -> str:
+        """Format MT103 SWIFT message"""
+        mt103 = f"""
+{{1:F01{instruction.source_routing}0000000000}}
+{{2:I103{instruction.destination_routing}N}}
+{{3:{{108:MT103}}}}
+{{4:
+:20:{instruction.reference or str(instruction.id)[:16]}
+:23B:CRED
+:32A:{instruction.timestamp.strftime('%y%m%d')}{instruction.currency}{instruction.amount}
+:50K:/{instruction.source_account}
+:59:/{instruction.destination_account}
+:70:{instruction.message[:140] if instruction.message else 'Payment'}
+:71A:OUR
+-}}
+"""
+        return mt103
+        
+    async def get_status(self, payment_id: str) -> PaymentStatus:
+        """Get SWIFT payment status"""
+        # In production, query SWIFT gpi tracker
+        return PaymentStatus.PROCESSING
+
+
+class SEPAAdapter(NetworkAdapter):
+    """SEPA network adapter"""
+    
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process SEPA payment"""
+        # Create SEPA XML message (ISO 20022)
+        sepa_xml = self._create_sepa_xml(instruction)
+        
+        # Simulate SEPA processing
+        await asyncio.sleep(0.05)
+        
+        logger.info(f"SEPA payment initiated: {instruction.id}")
+        
+        return PaymentStatus.PROCESSING
+        
+    def _create_sepa_xml(self, instruction: PaymentInstruction) -> str:
+        """Create SEPA XML message"""
+        xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03">
+  <CstmrCdtTrfInitn>
+    <GrpHdr>
+      <MsgId>{instruction.id}</MsgId>
+      <CreDtTm>{instruction.timestamp.isoformat()}</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>{instruction.amount}</CtrlSum>
+    </GrpHdr>
+    <PmtInf>
+      <PmtInfId>{instruction.id}</PmtInfId>
+      <PmtMtd>TRF</PmtMtd>
+      <CdtTrfTxInf>
+        <PmtId>
+          <EndToEndId>{instruction.reference or instruction.id}</EndToEndId>
+        </PmtId>
+        <Amt>
+          <InstdAmt Ccy="{instruction.currency}">{instruction.amount}</InstdAmt>
+        </Amt>
+        <CdtrAcct>
+          <Id>
+            <IBAN>{instruction.destination_account}</IBAN>
+          </Id>
+        </CdtrAcct>
+      </CdtTrfTxInf>
+    </PmtInf>
+  </CstmrCdtTrfInitn>
+</Document>"""
+        return xml
+
+
+class ACHAdapter(NetworkAdapter):
+    """ACH network adapter"""
+    
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process ACH payment"""
+        # Format NACHA file entry
+        nacha_entry = self._format_nacha_entry(instruction)
+        
+        # Simulate ACH batch processing
+        await asyncio.sleep(0.02)
+        
+        logger.info(f"ACH payment batched: {instruction.id}")
+        
+        return PaymentStatus.PROCESSING
+        
+    def _format_nacha_entry(self, instruction: PaymentInstruction) -> str:
+        """Format NACHA file entry"""
+        # Simplified NACHA format
+        entry = f"""
+6{instruction.metadata.get('transaction_code', '22')}
+{instruction.destination_routing:>9}
+{instruction.destination_account[:17]:>17}
+{int(instruction.amount * 100):010d}
+{instruction.reference[:15]:<15}
+{instruction.metadata.get('receiver_name', 'RECEIVER')[:22]:<22}
+{instruction.metadata.get('discretionary_data', '  '):<2}
+0
+{instruction.source_routing:>9}
+"""
+        return entry
+
+
+class FedWireAdapter(NetworkAdapter):
+    """FedWire network adapter"""
+    
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process FedWire payment"""
+        # Format FedWire message
+        fedwire_msg = self._format_fedwire_message(instruction)
+        
+        # Simulate real-time gross settlement
+        await asyncio.sleep(0.01)
+        
+        logger.info(f"FedWire payment sent: {instruction.id}")
+        
+        return PaymentStatus.CLEARED
+        
+    def _format_fedwire_message(self, instruction: PaymentInstruction) -> Dict[str, Any]:
+        """Format FedWire message"""
         return {
-            'id': self.id,
-            'network': self.network.name,
-            'message_type': self.message_type.name,
-            'sender': self.sender,
-            'receiver': self.receiver,
-            'amount': str(self.amount),
-            'currency': self.currency,
-            'value_date': self.value_date.isoformat(),
-            'reference': self.reference,
-            'metadata': self.metadata,
-            'signature': self.signature
+            'message_type': '10',
+            'sender_reference': str(instruction.id),
+            'amount': str(instruction.amount),
+            'sender_routing': instruction.source_routing,
+            'receiver_routing': instruction.destination_routing,
+            'receiver_account': instruction.destination_account,
+            'business_function_code': '1030',
+            'sender_to_receiver_info': instruction.message
         }
 
 
-class SWIFTProtocol:
-    """SWIFT payment protocol implementation"""
+class CardNetworkAdapter(NetworkAdapter):
+    """Card network adapter for Visa/Mastercard/Amex"""
+    
+    async def process_payment(self, instruction: PaymentInstruction) -> PaymentStatus:
+        """Process card payment"""
+        # Validate card details
+        if not self._validate_card(instruction.source_account):
+            return PaymentStatus.REJECTED
+            
+        # Simulate authorization
+        auth_result = await self._authorize_payment(instruction)
+        
+        if auth_result:
+            return PaymentStatus.CLEARED
+        else:
+            return PaymentStatus.REJECTED
+            
+    def _validate_card(self, card_number: str) -> bool:
+        """Validate card number using Luhn algorithm"""
+        if not card_number.isdigit():
+            return False
+            
+        digits = [int(d) for d in card_number]
+        checksum = 0
+        
+        for i in range(len(digits) - 2, -1, -2):
+            doubled = digits[i] * 2
+            if doubled > 9:
+                doubled = doubled - 9
+            digits[i] = doubled
+            
+        return sum(digits) % 10 == 0
+        
+    async def _authorize_payment(self, instruction: PaymentInstruction) -> bool:
+        """Authorize card payment"""
+        # Simulate authorization with issuer
+        await asyncio.sleep(0.05)
+        
+        # Simple authorization logic
+        if instruction.amount > Decimal("10000"):
+            # Large transactions require additional checks
+            return instruction.compliance_data.get('verified', False)
+            
+        return True
+
+
+class ComplianceEngine:
+    """Payment compliance and regulatory checks"""
     
     def __init__(self):
-        self.bic_pattern = re.compile(r'^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$')
-        self.iban_pattern = re.compile(r'^[A-Z]{2}[0-9]{2}[A-Z0-9]+$')
+        self.aml_threshold = Decimal("10000")
+        self.sanctions_list: Set[str] = set()
+        self.high_risk_countries = {'IR', 'KP', 'SY'}
         
-    def validate_bic(self, bic: str) -> bool:
-        """Validate SWIFT BIC code"""
-        return bool(self.bic_pattern.match(bic))
-    
-    def validate_iban(self, iban: str) -> bool:
-        """Validate IBAN"""
-        if not self.iban_pattern.match(iban):
-            return False
-        
-        # Validate IBAN checksum
-        iban_digits = (iban[4:] + iban[:4]).upper()
-        iban_number = ''.join(str(ord(c) - 55) if c.isalpha() else c for c in iban_digits)
-        return int(iban_number) % 97 == 1
-    
-    def create_mt103(
+    async def check_compliance(
         self,
-        sender_bic: str,
-        receiver_bic: str,
-        sender_account: str,
-        receiver_account: str,
-        amount: Decimal,
-        currency: str,
-        reference: str,
-        remittance_info: str = ""
-    ) -> PaymentMessage:
-        """Create MT103 customer transfer message"""
+        instruction: PaymentInstruction,
+        level: ComplianceLevel = ComplianceLevel.STANDARD
+    ) -> Tuple[bool, Optional[str]]:
+        """Run compliance checks on payment"""
         
-        if not self.validate_bic(sender_bic):
-            raise ValueError(f"Invalid sender BIC: {sender_bic}")
-        if not self.validate_bic(receiver_bic):
-            raise ValueError(f"Invalid receiver BIC: {receiver_bic}")
-        
-        message_id = f"MT103-{uuid4().hex[:16].upper()}"
-        
-        # Build MT103 message format
-        mt103_fields = {
-            ':20:': reference,  # Transaction Reference
-            ':23B:': 'CRED',  # Bank Operation Code
-            ':32A:': f"{datetime.now().strftime('%y%m%d')}{currency}{amount}",  # Value Date/Currency/Amount
-            ':50K:': f"/{sender_account}\n{sender_bic}",  # Ordering Customer
-            ':59:': f"/{receiver_account}\n{receiver_bic}",  # Beneficiary Customer
-            ':70:': remittance_info[:140],  # Remittance Information
-            ':71A:': 'OUR',  # Details of Charges
-        }
-        
-        raw_message = '\n'.join(f"{k}{v}" for k, v in mt103_fields.items())
-        
-        return PaymentMessage(
-            id=message_id,
-            network=PaymentNetwork.SWIFT,
-            message_type=MessageType.MT103,
-            sender=sender_bic,
-            receiver=receiver_bic,
-            amount=amount,
-            currency=currency,
-            value_date=datetime.now(timezone.utc),
-            reference=reference,
-            metadata={
-                'sender_account': sender_account,
-                'receiver_account': receiver_account,
-                'remittance_info': remittance_info,
-                'charges': 'OUR'
-            },
-            raw_message=raw_message
-        )
-    
-    def create_mt202(
-        self,
-        sender_bic: str,
-        receiver_bic: str,
-        amount: Decimal,
-        currency: str,
-        reference: str
-    ) -> PaymentMessage:
-        """Create MT202 bank-to-bank transfer message"""
-        
-        if not self.validate_bic(sender_bic):
-            raise ValueError(f"Invalid sender BIC: {sender_bic}")
-        if not self.validate_bic(receiver_bic):
-            raise ValueError(f"Invalid receiver BIC: {receiver_bic}")
-        
-        message_id = f"MT202-{uuid4().hex[:16].upper()}"
-        
-        # Build MT202 message format
-        mt202_fields = {
-            ':20:': reference,
-            ':21:': reference,  # Related Reference
-            ':32A:': f"{datetime.now().strftime('%y%m%d')}{currency}{amount}",
-            ':52A:': sender_bic,  # Ordering Institution
-            ':58A:': receiver_bic,  # Beneficiary Institution
-        }
-        
-        raw_message = '\n'.join(f"{k}{v}" for k, v in mt202_fields.items())
-        
-        return PaymentMessage(
-            id=message_id,
-            network=PaymentNetwork.SWIFT,
-            message_type=MessageType.MT202,
-            sender=sender_bic,
-            receiver=receiver_bic,
-            amount=amount,
-            currency=currency,
-            value_date=datetime.now(timezone.utc),
-            reference=reference,
-            metadata={'type': 'bank_transfer'},
-            raw_message=raw_message
-        )
-    
-    def parse_mt103(self, raw_message: str) -> Dict[str, Any]:
-        """Parse MT103 message"""
-        parsed = {}
-        lines = raw_message.split('\n')
-        
-        for line in lines:
-            if line.startswith(':20:'):
-                parsed['reference'] = line[4:]
-            elif line.startswith(':32A:'):
-                value = line[5:]
-                parsed['value_date'] = value[:6]
-                parsed['currency'] = value[6:9]
-                parsed['amount'] = value[9:].replace(',', '.')
-            elif line.startswith(':50K:'):
-                parsed['ordering_customer'] = line[5:]
-            elif line.startswith(':59:'):
-                parsed['beneficiary'] = line[4:]
-            elif line.startswith(':70:'):
-                parsed['remittance_info'] = line[4:]
+        # Sanctions screening
+        if await self._check_sanctions(instruction):
+            return False, "Sanctions match found"
+            
+        # AML checks
+        if instruction.amount >= self.aml_threshold:
+            if not await self._perform_aml_checks(instruction):
+                return False, "AML checks failed"
                 
-        return parsed
-
-
-class SEPAProtocol:
-    """SEPA (Single Euro Payments Area) protocol implementation"""
-    
-    def __init__(self):
-        self.supported_currencies = {'EUR'}
-        self.sepa_countries = {
-            'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR',
-            'DE', 'GR', 'HU', 'IS', 'IE', 'IT', 'LV', 'LI', 'LT', 'LU',
-            'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
-            'CH', 'GB', 'SM', 'VA', 'MC', 'AD'
-        }
-    
-    def validate_sepa_account(self, iban: str) -> bool:
-        """Validate SEPA account (IBAN)"""
-        if len(iban) < 15 or len(iban) > 34:
+        # Country risk checks
+        if level == ComplianceLevel.ENHANCED or level == ComplianceLevel.STRICT:
+            country_code = instruction.metadata.get('destination_country')
+            if country_code in self.high_risk_countries:
+                if level == ComplianceLevel.STRICT:
+                    return False, f"High-risk country: {country_code}"
+                else:
+                    # Enhanced due diligence required
+                    instruction.compliance_data['enhanced_dd_required'] = True
+                    
+        # Transaction monitoring
+        if not await self._monitor_transaction_patterns(instruction):
+            return False, "Suspicious transaction pattern detected"
+            
+        return True, None
+        
+    async def _check_sanctions(self, instruction: PaymentInstruction) -> bool:
+        """Check against sanctions lists"""
+        # In production, check OFAC, EU, UN sanctions lists
+        entities_to_check = [
+            instruction.source_account,
+            instruction.destination_account,
+            instruction.metadata.get('sender_name', ''),
+            instruction.metadata.get('receiver_name', '')
+        ]
+        
+        for entity in entities_to_check:
+            if entity in self.sanctions_list:
+                return True
+                
+        return False
+        
+    async def _perform_aml_checks(self, instruction: PaymentInstruction) -> bool:
+        """Perform AML checks"""
+        # Check for structuring
+        if await self._detect_structuring(instruction):
             return False
-        
-        country_code = iban[:2]
-        return country_code in self.sepa_countries
-    
-    def create_sct(
-        self,
-        debtor_iban: str,
-        debtor_name: str,
-        creditor_iban: str,
-        creditor_name: str,
-        amount: Decimal,
-        reference: str,
-        remittance_info: str = ""
-    ) -> PaymentMessage:
-        """Create SEPA Credit Transfer (SCT)"""
-        
-        if not self.validate_sepa_account(debtor_iban):
-            raise ValueError(f"Invalid debtor IBAN: {debtor_iban}")
-        if not self.validate_sepa_account(creditor_iban):
-            raise ValueError(f"Invalid creditor IBAN: {creditor_iban}")
-        
-        message_id = f"SCT-{uuid4().hex[:16].upper()}"
-        
-        # Create ISO 20022 pain.001 XML message
-        root = ET.Element('Document', xmlns='urn:iso:std:iso:20022:tech:xsd:pain.001.001.03')
-        cstmr_cdt_trf = ET.SubElement(root, 'CstmrCdtTrfInitn')
-        
-        # Group Header
-        grp_hdr = ET.SubElement(cstmr_cdt_trf, 'GrpHdr')
-        ET.SubElement(grp_hdr, 'MsgId').text = message_id
-        ET.SubElement(grp_hdr, 'CreDtTm').text = datetime.now(timezone.utc).isoformat()
-        ET.SubElement(grp_hdr, 'NbOfTxs').text = '1'
-        ET.SubElement(grp_hdr, 'CtrlSum').text = str(amount)
-        
-        # Payment Information
-        pmt_inf = ET.SubElement(cstmr_cdt_trf, 'PmtInf')
-        ET.SubElement(pmt_inf, 'PmtInfId').text = message_id
-        ET.SubElement(pmt_inf, 'PmtMtd').text = 'TRF'
-        
-        # Debtor
-        dbtr = ET.SubElement(pmt_inf, 'Dbtr')
-        ET.SubElement(dbtr, 'Nm').text = debtor_name
-        dbtr_acct = ET.SubElement(pmt_inf, 'DbtrAcct')
-        dbtr_id = ET.SubElement(dbtr_acct, 'Id')
-        ET.SubElement(dbtr_id, 'IBAN').text = debtor_iban
-        
-        # Credit Transfer Transaction
-        cdt_trf_tx = ET.SubElement(pmt_inf, 'CdtTrfTxInf')
-        pmt_id = ET.SubElement(cdt_trf_tx, 'PmtId')
-        ET.SubElement(pmt_id, 'EndToEndId').text = reference
-        
-        amt = ET.SubElement(cdt_trf_tx, 'Amt')
-        instd_amt = ET.SubElement(amt, 'InstdAmt', Ccy='EUR')
-        instd_amt.text = str(amount)
-        
-        # Creditor
-        cdtr = ET.SubElement(cdt_trf_tx, 'Cdtr')
-        ET.SubElement(cdtr, 'Nm').text = creditor_name
-        cdtr_acct = ET.SubElement(cdt_trf_tx, 'CdtrAcct')
-        cdtr_id = ET.SubElement(cdtr_acct, 'Id')
-        ET.SubElement(cdtr_id, 'IBAN').text = creditor_iban
-        
-        # Remittance Information
-        if remittance_info:
-            rmt_inf = ET.SubElement(cdt_trf_tx, 'RmtInf')
-            ET.SubElement(rmt_inf, 'Ustrd').text = remittance_info[:140]
-        
-        raw_message = ET.tostring(root, encoding='unicode')
-        
-        return PaymentMessage(
-            id=message_id,
-            network=PaymentNetwork.SEPA,
-            message_type=MessageType.PAIN001,
-            sender=debtor_iban,
-            receiver=creditor_iban,
-            amount=amount,
-            currency='EUR',
-            value_date=datetime.now(timezone.utc),
-            reference=reference,
-            metadata={
-                'debtor_name': debtor_name,
-                'creditor_name': creditor_name,
-                'remittance_info': remittance_info,
-                'scheme': 'SCT'
-            },
-            raw_message=raw_message
-        )
-    
-    def create_sct_inst(
-        self,
-        debtor_iban: str,
-        creditor_iban: str,
-        amount: Decimal,
-        reference: str
-    ) -> PaymentMessage:
-        """Create SEPA Instant Credit Transfer (SCT Inst)"""
-        
-        if amount > Decimal('100000'):
-            raise ValueError("SCT Inst limited to EUR 100,000")
-        
-        # Similar to SCT but with instant processing flag
-        message = self.create_sct(
-            debtor_iban=debtor_iban,
-            debtor_name="",  # Would be filled from account lookup
-            creditor_iban=creditor_iban,
-            creditor_name="",  # Would be filled from account lookup
-            amount=amount,
-            reference=reference
-        )
-        
-        message.metadata['scheme'] = 'SCT_INST'
-        message.metadata['max_execution_time'] = 10  # seconds
-        
-        return message
-
-
-class ACHProtocol:
-    """ACH (Automated Clearing House) protocol implementation"""
-    
-    def __init__(self):
-        self.supported_sec_codes = {
-            'PPD': 'Prearranged Payment and Deposit',
-            'CCD': 'Corporate Credit or Debit',
-            'WEB': 'Internet-Initiated Entry',
-            'TEL': 'Telephone-Initiated Entry',
-            'CTX': 'Corporate Trade Exchange'
-        }
-        
-    def validate_routing_number(self, routing: str) -> bool:
-        """Validate US routing number (ABA)"""
-        if len(routing) != 9 or not routing.isdigit():
+            
+        # Check velocity
+        if await self._check_velocity_limits(instruction):
             return False
+            
+        return True
         
-        # Checksum validation
-        checksum = (
-            3 * (int(routing[0]) + int(routing[3]) + int(routing[6])) +
-            7 * (int(routing[1]) + int(routing[4]) + int(routing[7])) +
-            (int(routing[2]) + int(routing[5]) + int(routing[8]))
-        )
+    async def _detect_structuring(self, instruction: PaymentInstruction) -> bool:
+        """Detect payment structuring attempts"""
+        # Check for multiple payments just below threshold
+        # In production, would query transaction history
+        return False
         
-        return checksum % 10 == 0
-    
-    def create_ach_credit(
-        self,
-        originator_routing: str,
-        originator_account: str,
-        originator_name: str,
-        receiver_routing: str,
-        receiver_account: str,
-        receiver_name: str,
-        amount: Decimal,
-        sec_code: str = 'PPD',
-        reference: str = ""
-    ) -> PaymentMessage:
-        """Create ACH credit transfer"""
+    async def _check_velocity_limits(self, instruction: PaymentInstruction) -> bool:
+        """Check transaction velocity limits"""
+        # In production, check daily/weekly/monthly limits
+        return False
         
-        if not self.validate_routing_number(originator_routing):
-            raise ValueError(f"Invalid originator routing: {originator_routing}")
-        if not self.validate_routing_number(receiver_routing):
-            raise ValueError(f"Invalid receiver routing: {receiver_routing}")
-        if sec_code not in self.supported_sec_codes:
-            raise ValueError(f"Invalid SEC code: {sec_code}")
+    async def _monitor_transaction_patterns(self, instruction: PaymentInstruction) -> bool:
+        """Monitor for suspicious transaction patterns"""
+        # ML-based pattern detection would go here
+        return True
         
-        message_id = f"ACH-{uuid4().hex[:16].upper()}"
+    async def generate_reports(self, instruction: PaymentInstruction) -> Dict[str, Any]:
+        """Generate regulatory reports"""
+        reports = {}
         
-        # Build NACHA format entry
-        entry = {
-            'record_type': '6',  # Entry Detail Record
-            'transaction_code': '22',  # Credit to checking account
-            'receiving_dfi': receiver_routing[:8],
-            'check_digit': receiver_routing[8],
-            'receiving_account': receiver_account[:17].ljust(17),
-            'amount': str(int(amount * 100)).zfill(10),  # In cents
-            'individual_id': reference[:15].ljust(15),
-            'individual_name': receiver_name[:22].ljust(22),
-            'discretionary_data': '  ',
-            'addenda_indicator': '0',
-            'trace_number': f"{originator_routing[:8]}{message_id[-7:]}"
-        }
+        # CTR (Currency Transaction Report) for large cash transactions
+        if instruction.amount >= Decimal("10000") and instruction.metadata.get('cash', False):
+            reports['ctr'] = self._generate_ctr(instruction)
+            
+        # SAR (Suspicious Activity Report) if flagged
+        if instruction.compliance_data.get('suspicious', False):
+            reports['sar'] = self._generate_sar(instruction)
+            
+        return reports
         
-        raw_message = ''.join(entry.values())
-        
-        return PaymentMessage(
-            id=message_id,
-            network=PaymentNetwork.ACH,
-            message_type=MessageType.PAIN001,  # Using ISO 20022 equivalent
-            sender=f"{originator_routing}:{originator_account}",
-            receiver=f"{receiver_routing}:{receiver_account}",
-            amount=amount,
-            currency='USD',
-            value_date=datetime.now(timezone.utc),
-            reference=reference,
-            metadata={
-                'originator_name': originator_name,
-                'receiver_name': receiver_name,
-                'sec_code': sec_code,
-                'transaction_code': '22',
-                'entry_class': self.supported_sec_codes[sec_code]
-            },
-            raw_message=raw_message
-        )
-
-
-class FedWireProtocol:
-    """FedWire payment protocol implementation"""
-    
-    def __init__(self):
-        self.message_types = {
-            '1000': 'Customer Transfer Plus',
-            '1500': 'Customer Transfer',
-            '1520': 'Basic Customer Transfer'
-        }
-    
-    def create_fedwire_transfer(
-        self,
-        sender_aba: str,
-        sender_name: str,
-        receiver_aba: str,
-        receiver_name: str,
-        amount: Decimal,
-        reference: str,
-        purpose: str = ""
-    ) -> PaymentMessage:
-        """Create FedWire transfer message"""
-        
-        message_id = f"FW-{uuid4().hex[:16].upper()}"
-        imad = f"{datetime.now().strftime('%Y%m%d')}{message_id[-8:]}"
-        
-        # Build FedWire message format
-        fedwire_fields = {
-            '{1100}': '1000',  # Message Type - Customer Transfer Plus
-            '{1110}': imad,  # IMAD (Input Message Accountability Data)
-            '{1120}': datetime.now().strftime('%Y%m%d%H%M'),  # Sender Supplied Info
-            '{1500}': '1000',  # Type/Subtype
-            '{1510}': imad,  # IMAD
-            '{1520}': str(int(amount * 100)),  # Amount in cents
-            '{2000}': f"{sender_aba}{sender_name[:35]}",  # Sender FI
-            '{3100}': f"{receiver_aba}{receiver_name[:35]}",  # Receiver FI
-            '{3320}': reference[:16],  # Reference for Beneficiary
-            '{3500}': purpose[:140] if purpose else 'PAYMENT',  # Originator to Beneficiary Info
-        }
-        
-        raw_message = ''.join(f"{k}{v}" for k, v in fedwire_fields.items())
-        
-        return PaymentMessage(
-            id=message_id,
-            network=PaymentNetwork.FEDWIRE,
-            message_type=MessageType.PACS008,  # Using ISO 20022 equivalent
-            sender=sender_aba,
-            receiver=receiver_aba,
-            amount=amount,
-            currency='USD',
-            value_date=datetime.now(timezone.utc),
-            reference=reference,
-            metadata={
-                'sender_name': sender_name,
-                'receiver_name': receiver_name,
-                'imad': imad,
-                'message_type': '1000',
-                'purpose': purpose
-            },
-            raw_message=raw_message
-        )
-
-
-class PaymentRouter:
-    """Intelligent payment routing engine"""
-    
-    def __init__(self):
-        self.swift = SWIFTProtocol()
-        self.sepa = SEPAProtocol()
-        self.ach = ACHProtocol()
-        self.fedwire = FedWireProtocol()
-        self.routing_rules = self._initialize_routing_rules()
-        
-    def _initialize_routing_rules(self) -> Dict[str, Any]:
-        """Initialize payment routing rules"""
+    def _generate_ctr(self, instruction: PaymentInstruction) -> Dict[str, Any]:
+        """Generate Currency Transaction Report"""
         return {
-            'amount_thresholds': {
-                'USD': {
-                    'ACH': Decimal('1000000'),  # ACH for amounts up to $1M
-                    'FEDWIRE': Decimal('999999999')  # FedWire for larger amounts
-                },
-                'EUR': {
-                    'SEPA': Decimal('999999999'),  # SEPA for EUR transfers
-                    'SEPA_INST': Decimal('100000')  # SEPA Instant up to €100k
-                }
-            },
-            'speed_priority': {
-                'instant': ['SEPA_INST', 'FEDWIRE', 'FASTER_PAYMENTS'],
-                'same_day': ['FEDWIRE', 'ACH_SAME_DAY', 'SEPA'],
-                'next_day': ['ACH', 'SEPA'],
-                'standard': ['SWIFT', 'ACH', 'SEPA']
-            },
-            'cross_border': ['SWIFT', 'FEDWIRE'],
-            'domestic': {
-                'US': ['ACH', 'FEDWIRE'],
-                'EU': ['SEPA', 'SEPA_INST'],
-                'GB': ['FASTER_PAYMENTS', 'SWIFT']
+            'report_type': 'CTR',
+            'transaction_id': str(instruction.id),
+            'amount': str(instruction.amount),
+            'currency': instruction.currency,
+            'date': instruction.timestamp.isoformat(),
+            'parties': {
+                'sender': instruction.source_account,
+                'receiver': instruction.destination_account
             }
         }
-    
-    def determine_optimal_route(
-        self,
-        sender_country: str,
-        receiver_country: str,
-        amount: Decimal,
-        currency: str,
-        speed: str = 'standard'
-    ) -> PaymentNetwork:
-        """Determine optimal payment route based on parameters"""
         
-        # Cross-border payments
-        if sender_country != receiver_country:
-            if currency == 'EUR' and sender_country in self.sepa.sepa_countries and receiver_country in self.sepa.sepa_countries:
-                if amount <= Decimal('100000') and speed == 'instant':
-                    return PaymentNetwork.SEPA  # Would use SEPA Instant
-                return PaymentNetwork.SEPA
-            return PaymentNetwork.SWIFT
-        
-        # Domestic payments
-        if sender_country == 'US' and currency == 'USD':
-            if amount > Decimal('1000000') or speed == 'instant':
-                return PaymentNetwork.FEDWIRE
-            return PaymentNetwork.ACH
-        
-        if sender_country in self.sepa.sepa_countries and currency == 'EUR':
-            if amount <= Decimal('100000') and speed == 'instant':
-                return PaymentNetwork.SEPA  # Would use SEPA Instant
-            return PaymentNetwork.SEPA
-        
-        # Default to SWIFT for other cases
-        return PaymentNetwork.SWIFT
-    
-    async def route_payment(
-        self,
-        sender_details: Dict[str, Any],
-        receiver_details: Dict[str, Any],
-        amount: Decimal,
-        currency: str,
-        reference: str,
-        speed: str = 'standard'
-    ) -> PaymentMessage:
-        """Route payment through optimal network"""
-        
-        # Determine routing
-        network = self.determine_optimal_route(
-            sender_details.get('country', ''),
-            receiver_details.get('country', ''),
-            amount,
-            currency,
-            speed
-        )
-        
-        # Create appropriate message based on network
-        if network == PaymentNetwork.SWIFT:
-            return self.swift.create_mt103(
-                sender_bic=sender_details.get('bic', ''),
-                receiver_bic=receiver_details.get('bic', ''),
-                sender_account=sender_details.get('account', ''),
-                receiver_account=receiver_details.get('account', ''),
-                amount=amount,
-                currency=currency,
-                reference=reference
-            )
-        
-        elif network == PaymentNetwork.SEPA:
-            return self.sepa.create_sct(
-                debtor_iban=sender_details.get('iban', ''),
-                debtor_name=sender_details.get('name', ''),
-                creditor_iban=receiver_details.get('iban', ''),
-                creditor_name=receiver_details.get('name', ''),
-                amount=amount,
-                reference=reference
-            )
-        
-        elif network == PaymentNetwork.ACH:
-            return self.ach.create_ach_credit(
-                originator_routing=sender_details.get('routing', ''),
-                originator_account=sender_details.get('account', ''),
-                originator_name=sender_details.get('name', ''),
-                receiver_routing=receiver_details.get('routing', ''),
-                receiver_account=receiver_details.get('account', ''),
-                receiver_name=receiver_details.get('name', ''),
-                amount=amount,
-                reference=reference
-            )
-        
-        elif network == PaymentNetwork.FEDWIRE:
-            return self.fedwire.create_fedwire_transfer(
-                sender_aba=sender_details.get('routing', ''),
-                sender_name=sender_details.get('name', ''),
-                receiver_aba=receiver_details.get('routing', ''),
-                receiver_name=receiver_details.get('name', ''),
-                amount=amount,
-                reference=reference
-            )
-        
-        else:
-            raise ValueError(f"Unsupported payment network: {network}")
+    def _generate_sar(self, instruction: PaymentInstruction) -> Dict[str, Any]:
+        """Generate Suspicious Activity Report"""
+        return {
+            'report_type': 'SAR',
+            'transaction_id': str(instruction.id),
+            'suspicious_activity': instruction.compliance_data.get('suspicious_reason', 'Unknown'),
+            'amount': str(instruction.amount),
+            'date': instruction.timestamp.isoformat()
+        }
 
 
 class PaymentGateway:
     """Main payment gateway orchestrator"""
     
-    def __init__(self):
-        self.router = PaymentRouter()
-        self.message_queue = asyncio.Queue()
-        self.network_connections = {}
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        self.config = config or {}
+        self.adapters: Dict[PaymentNetwork, NetworkAdapter] = {}
+        self.compliance = ComplianceEngine()
+        self.payment_cache: Dict[UUID, PaymentInstruction] = {}
         
     async def initialize(self):
-        """Initialize payment gateway connections"""
-        # In production, would establish connections to payment networks
-        pass
-    
-    async def send_payment(
+        """Initialize payment gateway"""
+        # Initialize network adapters
+        self.adapters[PaymentNetwork.SWIFT] = SWIFTAdapter(self.config)
+        self.adapters[PaymentNetwork.SEPA] = SEPAAdapter(self.config)
+        self.adapters[PaymentNetwork.ACH] = ACHAdapter(self.config)
+        self.adapters[PaymentNetwork.FEDWIRE] = FedWireAdapter(self.config)
+        
+        # Initialize card networks
+        card_adapter = CardNetworkAdapter(self.config)
+        self.adapters[PaymentNetwork.VISA] = card_adapter
+        self.adapters[PaymentNetwork.MASTERCARD] = card_adapter
+        self.adapters[PaymentNetwork.AMEX] = card_adapter
+        
+        # Initialize all adapters
+        for adapter in self.adapters.values():
+            await adapter.initialize()
+            
+        logger.info("Payment gateway initialized")
+        
+    async def process_payment(
         self,
-        sender: Dict[str, Any],
-        receiver: Dict[str, Any],
-        amount: Decimal,
-        currency: str,
-        reference: str,
-        speed: str = 'standard'
-    ) -> Tuple[bool, str]:
-        """Send payment through appropriate network"""
+        instruction: PaymentInstruction,
+        compliance_level: ComplianceLevel = ComplianceLevel.STANDARD
+    ) -> Tuple[PaymentStatus, Optional[str]]:
+        """Process payment through appropriate network"""
         
         try:
-            # Route payment
-            message = await self.router.route_payment(
-                sender,
-                receiver,
-                amount,
-                currency,
-                reference,
-                speed
-            )
+            # Validate instruction
+            instruction.validate()
             
-            # Queue for transmission
-            await self.message_queue.put(message)
+            # Run compliance checks
+            compliant, reason = await self.compliance.check_compliance(instruction, compliance_level)
+            if not compliant:
+                instruction.status = PaymentStatus.REJECTED
+                return PaymentStatus.REJECTED, reason
+                
+            # Store in cache
+            self.payment_cache[instruction.id] = instruction
             
-            # In production, would actually transmit to network
-            # For now, simulate successful transmission
-            await asyncio.sleep(0.1)
-            
-            return True, message.id
-            
+            # Route to appropriate network
+            if instruction.network in self.adapters:
+                adapter = self.adapters[instruction.network]
+                status = await adapter.process_payment(instruction)
+                instruction.status = status
+                
+                # Generate reports if needed
+                if instruction.amount >= self.compliance.aml_threshold:
+                    reports = await self.compliance.generate_reports(instruction)
+                    if reports:
+                        logger.info(f"Regulatory reports generated: {list(reports.keys())}")
+                        
+                return status, None
+            else:
+                return PaymentStatus.FAILED, f"Unsupported network: {instruction.network}"
+                
         except Exception as e:
-            return False, str(e)
-    
-    async def get_payment_status(self, payment_id: str) -> Dict[str, Any]:
+            logger.error(f"Payment processing error: {e}")
+            return PaymentStatus.FAILED, str(e)
+            
+    async def get_payment_status(self, payment_id: UUID) -> Optional[PaymentStatus]:
         """Get payment status"""
-        # In production, would query payment network
-        return {
-            'id': payment_id,
-            'status': 'COMPLETED',
-            'timestamp': datetime.now(timezone.utc).isoformat()
+        if payment_id in self.payment_cache:
+            instruction = self.payment_cache[payment_id]
+            
+            # Check with network for updated status
+            if instruction.network in self.adapters:
+                adapter = self.adapters[instruction.network]
+                status = await adapter.get_status(str(payment_id))
+                instruction.status = status
+                return status
+                
+            return instruction.status
+            
+        return None
+        
+    async def reverse_payment(self, payment_id: UUID, reason: str) -> bool:
+        """Reverse a payment"""
+        if payment_id not in self.payment_cache:
+            return False
+            
+        instruction = self.payment_cache[payment_id]
+        
+        if instruction.status not in [PaymentStatus.SETTLED, PaymentStatus.CLEARED]:
+            return False
+            
+        # Create reversal instruction
+        reversal = PaymentInstruction(
+            network=instruction.network,
+            source_account=instruction.destination_account,
+            source_routing=instruction.destination_routing,
+            destination_account=instruction.source_account,
+            destination_routing=instruction.source_routing,
+            amount=instruction.amount,
+            currency=instruction.currency,
+            reference=f"REVERSAL-{instruction.id}",
+            message=f"Reversal: {reason}",
+            metadata={'original_payment': str(instruction.id), 'reversal_reason': reason}
+        )
+        
+        status, _ = await self.process_payment(reversal)
+        
+        if status in [PaymentStatus.PROCESSING, PaymentStatus.CLEARED]:
+            instruction.status = PaymentStatus.REVERSED
+            return True
+            
+        return False
+        
+    async def close(self):
+        """Close payment gateway"""
+        for adapter in self.adapters.values():
+            await adapter.close()
+            
+        logger.info("Payment gateway closed")
+        
+    def get_supported_networks(self) -> List[str]:
+        """Get list of supported payment networks"""
+        return [network.value for network in PaymentNetwork]
+        
+    def get_network_capabilities(self, network: PaymentNetwork) -> Dict[str, Any]:
+        """Get capabilities of a payment network"""
+        capabilities = {
+            PaymentNetwork.SWIFT: {
+                'currencies': 'All',
+                'settlement_time': '1-5 days',
+                'max_amount': None,
+                'message_types': ['MT103', 'MT202', 'MT900']
+            },
+            PaymentNetwork.SEPA: {
+                'currencies': ['EUR'],
+                'settlement_time': '1 day (SCT Inst: instant)',
+                'max_amount': 999999999.99,
+                'schemes': ['SCT', 'SDD', 'SCT Inst']
+            },
+            PaymentNetwork.ACH: {
+                'currencies': ['USD'],
+                'settlement_time': '1-3 days (Same-day available)',
+                'max_amount': None,
+                'sec_codes': ['PPD', 'CCD', 'WEB', 'TEL']
+            },
+            PaymentNetwork.FEDWIRE: {
+                'currencies': ['USD'],
+                'settlement_time': 'Real-time',
+                'max_amount': None,
+                'operating_hours': 'Business days 9PM-7PM ET'
+            }
         }
-
-
-# Example usage
-async def main():
-    """Test payment protocols"""
-    
-    # Initialize gateway
-    gateway = PaymentGateway()
-    await gateway.initialize()
-    
-    # Test SWIFT payment
-    sender = {
-        'country': 'US',
-        'bic': 'CHASUS33XXX',
-        'account': '123456789',
-        'name': 'John Doe'
-    }
-    
-    receiver = {
-        'country': 'GB',
-        'bic': 'BARCGB22XXX',
-        'account': '987654321',
-        'name': 'Jane Smith'
-    }
-    
-    success, payment_id = await gateway.send_payment(
-        sender,
-        receiver,
-        Decimal('10000.00'),
-        'USD',
-        'REF-' + uuid4().hex[:8].upper(),
-        'standard'
-    )
-    
-    print(f"Payment sent: {success}, ID: {payment_id}")
-    
-    # Test SEPA payment
-    sender_sepa = {
-        'country': 'DE',
-        'iban': 'DE89370400440532013000',
-        'name': 'Max Mustermann'
-    }
-    
-    receiver_sepa = {
-        'country': 'FR',
-        'iban': 'FR1420041010050500013M02606',
-        'name': 'Pierre Dupont'
-    }
-    
-    success, payment_id = await gateway.send_payment(
-        sender_sepa,
-        receiver_sepa,
-        Decimal('500.00'),
-        'EUR',
-        'SEPA-' + uuid4().hex[:8].upper(),
-        'instant'
-    )
-    
-    print(f"SEPA payment sent: {success}, ID: {payment_id}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        
+        return capabilities.get(network, {})
