@@ -538,8 +538,8 @@ impl QuantumResistantEngine {
                     key_type: ManagedKeyType::DilithiumSigning,
                     security_level,
                     key_material: KeyMaterial {
-                        public_key: Some(public_key.public_key_data),
-                        private_key: Some(private_key.private_key_data),
+                        public_key: Some(public_key.public_key_data.clone()),
+                        private_key: Some(private_key.private_key_data.clone()),
                         symmetric_key: None,
                         key_derivation_info: None,
                     },

@@ -97,12 +97,12 @@ impl PostQuantumEngine {
         
         let context = BankingCryptoContext {
             bank_id: bank_id.to_string(),
-            dilithium_public: dilithium_keys.public,
-            dilithium_secret: dilithium_keys.secret,
-            kyber_public: kyber_keys.public,
-            kyber_secret: kyber_keys.secret,
-            sphincs_public: sphincs_keys.public,
-            sphincs_secret: sphincs_keys.secret,
+            dilithium_public: dilithium_keys.public.clone(),
+            dilithium_secret: dilithium_keys.secret.clone(),
+            kyber_public: kyber_keys.public.clone(),
+            kyber_secret: kyber_keys.secret.clone(),
+            sphincs_public: sphincs_keys.public.clone(),
+            sphincs_secret: sphincs_keys.secret.clone(),
             symmetric_key: symmetric_key,
             created_at: self.quantum_rng.get_timestamp(),
             version: 1,

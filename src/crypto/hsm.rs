@@ -47,7 +47,7 @@ pub enum HSMVendor {
     Generic,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FIPS140Level {
     Level1,
     Level2,

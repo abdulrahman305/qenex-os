@@ -110,7 +110,7 @@ pub struct OFACSanctionsData {
     pub updated_at: SystemTime,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SDNEntry {
     pub uid: String,
     pub first_name: Option<String>,
@@ -200,7 +200,7 @@ pub struct PEPDatabase {
     last_sync: RwLock<SystemTime>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PEPRecord {
     pub id: String,
     pub full_name: String,
@@ -298,7 +298,7 @@ pub struct RealTimeScreeningService {
     metrics: Arc<ScreeningMetrics>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreeningResult {
     pub screening_id: Uuid,
     pub entity_name: String,

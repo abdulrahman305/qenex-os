@@ -23,14 +23,35 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-import asyncpg
-import numpy as np
-import tensorflow as tf
+# Handle optional dependencies gracefully
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
+    print("Warning: asyncpg not installed, database features limited")
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+    print("Warning: numpy not installed, some features limited")
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+    print("Warning: tensorflow not installed, AI features disabled")
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from web3 import Web3
+
+try:
+    from web3 import Web3
+except ImportError:
+    Web3 = None
+    print("Warning: web3 not installed, blockchain features disabled")
 
 # Set decimal precision for financial calculations
 getcontext().prec = 38

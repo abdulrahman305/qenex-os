@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """
+<<<<<<< HEAD
 QENEX OS System Test
 Quick test to verify the system is working correctly
 """
