@@ -7,18 +7,54 @@ import asyncio
 import hashlib
 import json
 import time
+import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from decimal import Decimal
+from threading import RLock, Lock
+from contextlib import contextmanager
+import logging
 
-@dataclass
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 class Token:
-    """Represents a cryptocurrency token"""
-    symbol: str
-    name: str
-    decimals: int
-    address: str
-    balance: Decimal
+    """Thread-safe cryptocurrency token with atomic operations"""
+    def __init__(self, symbol: str, name: str, decimals: int, address: str, balance: Decimal):
+        self.symbol = symbol
+        self.name = name
+        self.decimals = decimals
+        self.address = address
+        self._balance = balance
+        self._lock = RLock()
+    
+    @property 
+    def balance(self) -> Decimal:
+        """Get balance atomically"""
+        with self._lock:
+            return self._balance
+    
+    def update_balance(self, new_balance: Decimal) -> bool:
+        """Update balance atomically"""
+        with self._lock:
+            if new_balance < 0:
+                return False
+            self._balance = new_balance
+            return True
+    
+    def transfer_amount(self, amount: Decimal) -> bool:
+        """Atomically deduct amount if sufficient balance exists"""
+        with self._lock:
+            if self._balance >= amount:
+                self._balance -= amount
+                return True
+            return False
+    
+    def add_amount(self, amount: Decimal):
+        """Atomically add amount to balance"""
+        with self._lock:
+            self._balance += amount
 
 @dataclass
 class Transaction:
@@ -31,17 +67,82 @@ class Transaction:
     status: str
     timestamp: float
 
+class AtomicStakingPosition:
+    """Thread-safe staking position"""
+    def __init__(self, token_symbol: str):
+        self.token_symbol = token_symbol
+        self._amount = Decimal("0")
+        self._lock = RLock()
+    
+    @property
+    def amount(self) -> Decimal:
+        with self._lock:
+            return self._amount
+    
+    def add_stake(self, amount: Decimal) -> bool:
+        with self._lock:
+            if amount <= 0:
+                return False
+            self._amount += amount
+            return True
+    
+    def remove_stake(self, amount: Decimal) -> bool:
+        with self._lock:
+            if self._amount >= amount:
+                self._amount -= amount
+                return True
+            return False
+
+class AtomicLiquidityPool:
+    """Thread-safe liquidity pool"""
+    def __init__(self, token_a: str, token_b: str):
+        self.token_a = token_a
+        self.token_b = token_b
+        self._reserve_a = Decimal("0")
+        self._reserve_b = Decimal("0")
+        self._user_share = Decimal("0")
+        self._lock = RLock()
+    
+    @contextmanager
+    def atomic_operation(self):
+        """Context manager for atomic pool operations"""
+        self._lock.acquire()
+        try:
+            yield self
+        finally:
+            self._lock.release()
+    
+    def add_liquidity(self, amount_a: Decimal, amount_b: Decimal) -> Decimal:
+        """Add liquidity and return LP tokens earned"""
+        with self._lock:
+            lp_tokens = (amount_a * amount_b) ** Decimal('0.5')
+            self._reserve_a += amount_a
+            self._reserve_b += amount_b
+            self._user_share += lp_tokens
+            return lp_tokens
+    
+    def get_reserves(self) -> tuple[Decimal, Decimal]:
+        with self._lock:
+            return self._reserve_a, self._reserve_b
+
 class DeFiIntegration:
-    """DeFi protocol integration manager"""
+    """Thread-safe DeFi protocol integration manager"""
     
     def __init__(self):
         self.wallet_address: Optional[str] = None
         self.private_key: Optional[str] = None
         self.tokens: Dict[str, Token] = {}
         self.transactions: List[Transaction] = []
-        self.staking_positions: Dict[str, Decimal] = {}
-        self.liquidity_pools: Dict[str, Dict] = {}
+        self.staking_positions: Dict[str, AtomicStakingPosition] = {}
+        self.liquidity_pools: Dict[str, AtomicLiquidityPool] = {}
         self.initialized = False
+        
+        # Thread safety locks
+        self._wallet_lock = RLock()
+        self._transactions_lock = RLock()
+        self._tokens_lock = RLock()
+        self._staking_lock = RLock()
+        self._pools_lock = RLock()
         
     async def initialize(self):
         """Initialize DeFi integration"""
@@ -67,11 +168,21 @@ class DeFiIntegration:
     
     def _create_wallet(self):
         """Create a new wallet"""
-        # Generate mock wallet address (in production, use proper cryptography)
-        import secrets
-        self.private_key = "0x" + secrets.token_hex(32)
+        # Use environment variable or secure key management system
+        import os
+        private_key_env = os.environ.get('QENEX_PRIVATE_KEY')
+        if private_key_env:
+            # Use key from secure environment variable
+            self.private_key = private_key_env
+        else:
+            # Generate temporary key for demo purposes only - NOT for production
+            import secrets
+            self.private_key = "0x" + secrets.token_hex(32)
+            print("WARNING: Using demo key - set QENEX_PRIVATE_KEY env variable for production")
+        
+        # Never log private keys in production
         self.wallet_address = "0x" + hashlib.sha256(self.private_key.encode()).hexdigest()[:40]
-        print(f"🔑 Wallet created: {self.wallet_address}")
+        print(f"🔑 Wallet initialized: {self.wallet_address[:20]}...")
     
     def _load_default_tokens(self):
         """Load default tokens"""
@@ -106,83 +217,128 @@ class DeFiIntegration:
         return Decimal("0")
     
     async def transfer(self, to_address: str, amount: Decimal, token_symbol: str = "QXC") -> Optional[str]:
-        """Transfer tokens"""
-        if token_symbol not in self.tokens:
-            print(f"❌ Token {token_symbol} not found")
+        """Transfer tokens atomically"""
+        with self._tokens_lock:
+            if token_symbol not in self.tokens:
+                logger.error(f"Token {token_symbol} not found")
+                return None
+            
+            token = self.tokens[token_symbol]
+        
+        # Check and atomically deduct balance
+        if not token.transfer_amount(amount):
+            logger.error(f"Insufficient balance for {token_symbol}: requested {amount}, available {token.balance}")
             return None
         
-        token = self.tokens[token_symbol]
-        
-        if token.balance < amount:
-            print(f"❌ Insufficient balance: {token.balance} < {amount}")
+        try:
+            # Create transaction
+            tx_hash = hashlib.sha256(f"{self.wallet_address}{to_address}{amount}{time.time()}".encode()).hexdigest()
+            
+            transaction = Transaction(
+                tx_hash=tx_hash,
+                from_addr=self.wallet_address,
+                to_addr=to_address,
+                value=amount,
+                gas_price=Decimal("20"),  # Gwei
+                status="pending",
+                timestamp=time.time()
+            )
+            
+            # Add transaction to list atomically
+            with self._transactions_lock:
+                self.transactions.append(transaction)
+            
+            # Simulate transaction processing
+            await asyncio.sleep(0.1)  # Reduced for better UX
+            
+            # Mark transaction as confirmed
+            transaction.status = "confirmed"
+            
+            logger.info(f"Transferred {amount} {token_symbol} to {to_address[:20]}... (tx: {tx_hash[:16]}...)")
+            return tx_hash
+            
+        except Exception as e:
+            # Rollback balance change if transaction creation failed
+            token.add_amount(amount)
+            logger.error(f"Transfer failed: {e}")
             return None
-        
-        # Create transaction
-        tx_hash = hashlib.sha256(f"{self.wallet_address}{to_address}{amount}{time.time()}".encode()).hexdigest()
-        
-        transaction = Transaction(
-            tx_hash=tx_hash,
-            from_addr=self.wallet_address,
-            to_addr=to_address,
-            value=amount,
-            gas_price=Decimal("20"),  # Gwei
-            status="pending",
-            timestamp=time.time()
-        )
-        
-        self.transactions.append(transaction)
-        
-        # Simulate transaction processing
-        await asyncio.sleep(1)
-        
-        # Update balance
-        token.balance -= amount
-        transaction.status = "confirmed"
-        
-        print(f"✅ Transferred {amount} {token_symbol} to {to_address[:10]}...")
-        return tx_hash
     
     async def stake(self, amount: Decimal, token_symbol: str = "QXC") -> bool:
-        """Stake tokens"""
-        if token_symbol not in self.tokens:
+        """Stake tokens atomically"""
+        with self._tokens_lock:
+            if token_symbol not in self.tokens:
+                logger.error(f"Token {token_symbol} not found")
+                return False
+            
+            token = self.tokens[token_symbol]
+        
+        # Atomically check and deduct balance
+        if not token.transfer_amount(amount):
+            logger.error(f"Insufficient balance for staking: requested {amount}, available {token.balance}")
             return False
         
-        token = self.tokens[token_symbol]
-        
-        if token.balance < amount:
-            print(f"❌ Insufficient balance for staking")
+        try:
+            # Ensure staking position exists
+            with self._staking_lock:
+                if token_symbol not in self.staking_positions:
+                    self.staking_positions[token_symbol] = AtomicStakingPosition(token_symbol)
+                
+                staking_position = self.staking_positions[token_symbol]
+            
+            # Add to staking position atomically
+            if staking_position.add_stake(amount):
+                logger.info(f"Staked {amount} {token_symbol} (total staked: {staking_position.amount})")
+                return True
+            else:
+                # Rollback if staking failed
+                token.add_amount(amount)
+                return False
+                
+        except Exception as e:
+            # Rollback balance change if staking failed
+            token.add_amount(amount)
+            logger.error(f"Staking failed: {e}")
             return False
-        
-        # Transfer to staking
-        token.balance -= amount
-        
-        if token_symbol not in self.staking_positions:
-            self.staking_positions[token_symbol] = Decimal("0")
-        
-        self.staking_positions[token_symbol] += amount
-        
-        print(f"✅ Staked {amount} {token_symbol}")
-        return True
     
     async def unstake(self, amount: Decimal, token_symbol: str = "QXC") -> bool:
-        """Unstake tokens"""
-        if token_symbol not in self.staking_positions:
+        """Unstake tokens atomically with rewards"""
+        with self._staking_lock:
+            if token_symbol not in self.staking_positions:
+                logger.error(f"No staking position found for {token_symbol}")
+                return False
+            
+            staking_position = self.staking_positions[token_symbol]
+        
+        # Check and atomically remove from staking
+        if not staking_position.remove_stake(amount):
+            logger.error(f"Insufficient staked balance: requested {amount}, available {staking_position.amount}")
             return False
         
-        if self.staking_positions[token_symbol] < amount:
-            print(f"❌ Insufficient staked balance")
+        try:
+            with self._tokens_lock:
+                if token_symbol not in self.tokens:
+                    logger.error(f"Token {token_symbol} not found")
+                    # Rollback staking removal
+                    staking_position.add_stake(amount)
+                    return False
+                
+                token = self.tokens[token_symbol]
+            
+            # Calculate rewards (10% APY, assuming 1 day staking for simplicity)
+            rewards = amount * Decimal("0.1") / Decimal("365")
+            
+            # Return staked amount plus rewards to token balance
+            token.add_amount(amount + rewards)
+            
+            logger.info(f"Unstaked {amount} {token_symbol} with {rewards:.6f} rewards "
+                       f"(remaining staked: {staking_position.amount})")
+            return True
+            
+        except Exception as e:
+            # Rollback staking removal if token update failed
+            staking_position.add_stake(amount)
+            logger.error(f"Unstaking failed: {e}")
             return False
-        
-        # Return from staking
-        self.staking_positions[token_symbol] -= amount
-        self.tokens[token_symbol].balance += amount
-        
-        # Calculate rewards (10% APY)
-        rewards = amount * Decimal("0.1") / Decimal("365")  # Daily rewards
-        self.tokens[token_symbol].balance += rewards
-        
-        print(f"✅ Unstaked {amount} {token_symbol} (rewards: {rewards:.4f})")
-        return True
     
     async def add_liquidity(self, token_a: str, token_b: str, amount_a: Decimal, amount_b: Decimal) -> Optional[str]:
         """Add liquidity to a pool"""

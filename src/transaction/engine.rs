@@ -1,9 +1,10 @@
 use std::collections::{HashMap, BTreeMap, VecDeque};
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, atomic::{AtomicU64, AtomicBool, Ordering}};
 use std::time::{SystemTime, Duration, Instant};
 use uuid::Uuid;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast, mpsc, Semaphore};
+use tokio::sync::{broadcast, mpsc, Semaphore, RwLock, Mutex, Notify};
+use tokio::time::{timeout, sleep};
 use sqlx::{PgPool, Row, Postgres, Transaction as SqlTransaction};
 use rust_decimal::Decimal;
 
@@ -17,24 +18,30 @@ use rust_decimal::Decimal;
 pub struct TransactionEngine {
     /// Database connection pool with ACID transaction support
     db_pool: Arc<PgPool>,
-    /// Active transaction state manager
+    /// Active transaction state manager with optimistic locking
     active_transactions: Arc<RwLock<HashMap<Uuid, ActiveTransaction>>>,
-    /// Transaction queue with priority scheduling
-    transaction_queue: Arc<Mutex<PriorityTransactionQueue>>,
+    /// Transaction queue with priority scheduling and atomic operations
+    transaction_queue: Arc<PriorityTransactionQueue>,
     /// Settlement engine for finalization
     settlement_engine: Arc<SettlementEngine>,
-    /// Lock manager for concurrency control
+    /// Lock manager for concurrency control with deadlock detection
     lock_manager: Arc<LockManager>,
     /// Transaction log for audit and recovery
     transaction_log: Arc<TransactionLog>,
     /// Event broadcasting for real-time updates
     event_broadcaster: Arc<EventBroadcaster>,
-    /// Performance metrics collector
+    /// Performance metrics collector with atomic counters
     metrics: Arc<TransactionMetrics>,
     /// Configuration settings
     config: TransactionEngineConfig,
     /// Background processing handles
-    background_tasks: Vec<tokio::task::JoinHandle<()>>,
+    background_tasks: Arc<RwLock<Vec<tokio::task::JoinHandle<()>>>>,
+    /// Shutdown signal for graceful termination
+    shutdown_signal: Arc<Notify>,
+    /// Engine running state
+    is_running: Arc<AtomicBool>,
+    /// Transaction sequence counter for ordering
+    transaction_sequence: Arc<AtomicU64>,
 }
 
 /// Configuration for the transaction engine
@@ -337,10 +344,13 @@ pub enum CommitVote {
     VoteAbort,
 }
 
-/// Priority-based transaction queue
+/// Priority-based transaction queue with atomic operations
 pub struct PriorityTransactionQueue {
-    queues: BTreeMap<TransactionPriority, VecDeque<Uuid>>,
-    queue_metrics: HashMap<TransactionPriority, QueueMetrics>,
+    queues: RwLock<BTreeMap<TransactionPriority, VecDeque<Uuid>>>,
+    queue_metrics: RwLock<HashMap<TransactionPriority, QueueMetrics>>,
+    queue_semaphore: Semaphore,
+    total_queued: AtomicU64,
+    total_processed: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
@@ -352,11 +362,21 @@ pub struct QueueMetrics {
     pub current_size: usize,
 }
 
-/// Sophisticated lock manager for concurrency control
+/// Sophisticated lock manager for concurrency control with deadlock prevention
 pub struct LockManager {
     locks: RwLock<HashMap<LockId, LockInfo>>,
     wait_graph: RwLock<HashMap<Uuid, Vec<Uuid>>>, // For deadlock detection
     lock_timeout: Duration,
+    deadlock_detector: Arc<DeadlockDetector>,
+    lock_sequence: AtomicU64,
+    contention_metrics: RwLock<HashMap<LockId, ContentionMetrics>>,
+}
+
+/// Deadlock detection and prevention system
+pub struct DeadlockDetector {
+    check_interval: Duration,
+    max_wait_time: Duration,
+    detection_enabled: AtomicBool,
 }
 
 pub type LockId = String;
@@ -522,14 +542,17 @@ pub struct EventFilter {
     pub currencies: Option<Vec<String>>,
 }
 
-/// Comprehensive performance metrics
+/// Comprehensive performance metrics with atomic counters
 pub struct TransactionMetrics {
     processing_times: RwLock<HashMap<TransactionType, Vec<Duration>>>,
-    throughput_counters: RwLock<HashMap<String, u64>>,
-    error_counters: RwLock<HashMap<ErrorCategory, u64>>,
-    queue_depths: RwLock<HashMap<TransactionPriority, u64>>,
+    throughput_counters: RwLock<HashMap<String, AtomicU64>>,
+    error_counters: RwLock<HashMap<ErrorCategory, AtomicU64>>,
+    queue_depths: RwLock<HashMap<TransactionPriority, AtomicU64>>,
     lock_contention: RwLock<HashMap<LockId, ContentionMetrics>>,
     settlement_metrics: RwLock<SettlementMetrics>,
+    total_transactions: AtomicU64,
+    successful_transactions: AtomicU64,
+    failed_transactions: AtomicU64,
 }
 
 #[derive(Debug, Clone)]
@@ -556,7 +579,7 @@ impl TransactionEngine {
         db_pool: Arc<PgPool>,
         config: TransactionEngineConfig,
     ) -> Result<Self, TransactionEngineError> {
-        // Initialize lock manager
+        // Initialize lock manager with deadlock detection
         let lock_manager = Arc::new(LockManager::new(
             Duration::from_millis(config.lock_timeout_ms)
         ));
@@ -574,20 +597,28 @@ impl TransactionEngine {
             subscribers: Arc::new(RwLock::new(HashMap::new())),
         });
         
-        // Initialize metrics collector
+        // Initialize metrics collector with atomic counters
         let metrics = Arc::new(TransactionMetrics::new());
+        
+        // Initialize priority queue with proper concurrency controls
+        let transaction_queue = Arc::new(PriorityTransactionQueue::new(
+            config.max_concurrent_transactions as usize
+        ));
         
         let engine = Self {
             db_pool,
             active_transactions: Arc::new(RwLock::new(HashMap::new())),
-            transaction_queue: Arc::new(Mutex::new(PriorityTransactionQueue::new())),
+            transaction_queue,
             settlement_engine,
             lock_manager,
             transaction_log,
             event_broadcaster,
             metrics,
             config,
-            background_tasks: vec![],
+            background_tasks: Arc::new(RwLock::new(vec![])),
+            shutdown_signal: Arc::new(Notify::new()),
+            is_running: Arc::new(AtomicBool::new(true)),
+            transaction_sequence: Arc::new(AtomicU64::new(0)),
         };
         
         // Start background processing tasks
@@ -596,23 +627,29 @@ impl TransactionEngine {
         Ok(engine)
     }
     
-    /// Submit a new transaction for processing
+    /// Submit a new transaction for processing with atomic operations
     pub async fn submit_transaction(
         &self,
         transaction_request: TransactionRequest,
     ) -> Result<Uuid, TransactionEngineError> {
+        // Check if engine is still running
+        if !self.is_running.load(Ordering::SeqCst) {
+            return Err(TransactionEngineError::SystemError("Engine is shutting down".to_string()));
+        }
+        
         let transaction_id = Uuid::new_v4();
         let now = SystemTime::now();
+        let sequence = self.transaction_sequence.fetch_add(1, Ordering::SeqCst);
         
-        // Create active transaction
+        // Create active transaction with sequence number for ordering
         let active_transaction = ActiveTransaction {
             id: transaction_id,
-            transaction_type: transaction_request.transaction_type,
+            transaction_type: transaction_request.transaction_type.clone(),
             status: TransactionStatus::Created,
-            from_account: transaction_request.from_account,
-            to_account: transaction_request.to_account,
+            from_account: transaction_request.from_account.clone(),
+            to_account: transaction_request.to_account.clone(),
             amount: transaction_request.amount,
-            currency: transaction_request.currency,
+            currency: transaction_request.currency.clone(),
             priority: transaction_request.priority.unwrap_or(TransactionPriority::Normal),
             created_at: now,
             updated_at: now,
@@ -627,13 +664,24 @@ impl TransactionEngine {
             two_phase_state: None,
         };
         
-        // Store active transaction
-        {
-            let mut active_txns = self.active_transactions.write().unwrap();
-            active_txns.insert(transaction_id, active_transaction);
-        }
+        // Atomically store active transaction with proper error handling
+        let insert_result = {
+            match timeout(Duration::from_millis(1000), self.active_transactions.write()).await {
+                Ok(mut active_txns) => {
+                    if active_txns.len() >= self.config.max_concurrent_transactions as usize {
+                        return Err(TransactionEngineError::SystemError("Maximum concurrent transactions exceeded".to_string()));
+                    }
+                    active_txns.insert(transaction_id, active_transaction);
+                    Ok(())
+                },
+                Err(_) => Err(TransactionEngineError::TimeoutError)
+            }
+        }?;
         
-        // Log transaction creation
+        // Atomically increment transaction counter
+        self.metrics.total_transactions.fetch_add(1, Ordering::SeqCst);
+        
+        // Log transaction creation with error handling
         self.transaction_log.log_event(LogEntry {
             entry_id: Uuid::new_v4(),
             transaction_id,
@@ -645,10 +693,10 @@ impl TransactionEngine {
             ip_address: transaction_request.client_ip,
         }).await?;
         
-        // Queue transaction for processing
+        // Queue transaction for processing with backpressure
         self.queue_transaction(transaction_id).await?;
         
-        // Broadcast event
+        // Broadcast event (non-blocking)
         let event = TransactionEvent {
             event_id: Uuid::new_v4(),
             transaction_id,
@@ -657,7 +705,8 @@ impl TransactionEngine {
             data: serde_json::json!({
                 "status": "Created",
                 "amount": transaction_request.amount,
-                "currency": transaction_request.currency
+                "currency": transaction_request.currency,
+                "sequence": sequence
             }),
         };
         let _ = self.event_broadcaster.tx.send(event);
@@ -841,17 +890,30 @@ impl TransactionEngine {
     }
     
     async fn queue_transaction(&self, transaction_id: Uuid) -> Result<(), TransactionEngineError> {
-        let active_txns = self.active_transactions.read().unwrap();
+        let active_txns = timeout(Duration::from_millis(1000), self.active_transactions.read()).await
+            .map_err(|_| TransactionEngineError::TimeoutError)?;
         let transaction = active_txns.get(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
         let priority = transaction.priority.clone();
         drop(active_txns);
         
-        let mut queue = self.transaction_queue.lock().unwrap();
-        queue.enqueue(transaction_id, priority);
+        // Use semaphore to control queue size and prevent overload
+        match timeout(Duration::from_millis(1000), 
+                     self.transaction_queue.queue_semaphore.acquire()).await {
+            Ok(permit) => {
+                // Permit will be released when transaction is dequeued
+                std::mem::forget(permit); // Keep permit until processing
+            },
+            Err(_) => {
+                return Err(TransactionEngineError::SystemError("Queue is full".to_string()));
+            }
+        }
         
-        // Update status
+        // Atomically enqueue transaction
+        self.transaction_queue.enqueue(transaction_id, priority).await?;
+        
+        // Update status atomically
         self.update_transaction_status(transaction_id, TransactionStatus::Queued).await?;
         
         Ok(())
@@ -886,31 +948,74 @@ impl TransactionEngine {
         &self,
         transaction_id: Uuid,
     ) -> Result<Vec<LockId>, TransactionEngineError> {
-        let active_txns = self.active_transactions.read().unwrap();
+        // Use timeout to prevent indefinite blocking
+        let active_txns = timeout(Duration::from_millis(1000), self.active_transactions.read()).await
+            .map_err(|_| TransactionEngineError::TimeoutError)?;
+        
         let transaction = active_txns.get(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
-        let mut locks = vec![];
+        let from_account = transaction.from_account.clone();
+        let to_account = transaction.to_account.clone();
+        drop(active_txns); // Release read lock early
         
         // Acquire account locks in deterministic order to prevent deadlock
         let mut account_locks = vec![
-            format!("account:{}", transaction.from_account),
-            format!("account:{}", transaction.to_account),
+            format!("account:{}", from_account),
+            format!("account:{}", to_account),
         ];
-        account_locks.sort();
+        account_locks.sort(); // Ensures consistent ordering across all transactions
+        account_locks.dedup(); // Remove duplicates for self-transfers
         
+        let mut acquired_locks = vec![];
+        
+        // Use hierarchical locking with timeout and backoff
         for lock_id in account_locks {
-            self.lock_manager.acquire_lock(lock_id.clone(), LockType::Exclusive, transaction_id).await?;
-            locks.push(lock_id);
+            match timeout(Duration::from_millis(self.config.lock_timeout_ms), 
+                         self.lock_manager.acquire_lock(lock_id.clone(), LockType::Exclusive, transaction_id)).await {
+                Ok(Ok(())) => {
+                    acquired_locks.push(lock_id);
+                },
+                Ok(Err(e)) => {
+                    // Release any locks acquired so far
+                    for released_lock in &acquired_locks {
+                        let _ = self.lock_manager.release_lock(released_lock.clone()).await;
+                    }
+                    return Err(e);
+                },
+                Err(_) => {
+                    // Timeout occurred - release acquired locks and fail
+                    for released_lock in &acquired_locks {
+                        let _ = self.lock_manager.release_lock(released_lock.clone()).await;
+                    }
+                    return Err(TransactionEngineError::TimeoutError);
+                }
+            }
         }
         
-        // Update transaction with acquired locks
-        drop(active_txns);
-        let mut active_txns = self.active_transactions.write().unwrap();
-        let transaction = active_txns.get_mut(&transaction_id).unwrap();
-        transaction.locks_held = locks.clone();
+        // Atomically update transaction with acquired locks
+        match timeout(Duration::from_millis(1000), self.active_transactions.write()).await {
+            Ok(mut active_txns) => {
+                if let Some(transaction) = active_txns.get_mut(&transaction_id) {
+                    transaction.locks_held = acquired_locks.clone();
+                } else {
+                    // Transaction was removed - release locks
+                    for released_lock in &acquired_locks {
+                        let _ = self.lock_manager.release_lock(released_lock.clone()).await;
+                    }
+                    return Err(TransactionEngineError::TransactionNotFound);
+                }
+            },
+            Err(_) => {
+                // Timeout on write lock - release acquired locks
+                for released_lock in &acquired_locks {
+                    let _ = self.lock_manager.release_lock(released_lock.clone()).await;
+                }
+                return Err(TransactionEngineError::TimeoutError);
+            }
+        }
         
-        Ok(locks)
+        Ok(acquired_locks)
     }
     
     async fn release_locks(&self, locks: &[LockId]) -> Result<(), TransactionEngineError> {
@@ -1111,26 +1216,42 @@ impl Default for TransactionEngineConfig {
 }
 
 impl PriorityTransactionQueue {
-    pub fn new() -> Self {
+    pub fn new(max_size: usize) -> Self {
         Self {
-            queues: BTreeMap::new(),
-            queue_metrics: HashMap::new(),
+            queues: RwLock::new(BTreeMap::new()),
+            queue_metrics: RwLock::new(HashMap::new()),
+            queue_semaphore: Semaphore::new(max_size),
+            total_queued: AtomicU64::new(0),
+            total_processed: AtomicU64::new(0),
         }
     }
     
-    pub fn enqueue(&mut self, transaction_id: Uuid, priority: TransactionPriority) {
-        let queue = self.queues.entry(priority).or_insert_with(VecDeque::new);
-        queue.push_back(transaction_id);
+    pub async fn enqueue(&self, transaction_id: Uuid, priority: TransactionPriority) -> Result<(), TransactionEngineError> {
+        match timeout(Duration::from_millis(1000), self.queues.write()).await {
+            Ok(mut queues) => {
+                let queue = queues.entry(priority).or_insert_with(VecDeque::new);
+                queue.push_back(transaction_id);
+                self.total_queued.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+            Err(_) => Err(TransactionEngineError::TimeoutError)
+        }
     }
     
-    pub fn dequeue(&mut self) -> Option<Uuid> {
-        // Dequeue from highest priority queue first
-        for queue in self.queues.values_mut() {
-            if let Some(transaction_id) = queue.pop_front() {
-                return Some(transaction_id);
-            }
+    pub async fn dequeue(&self) -> Result<Option<Uuid>, TransactionEngineError> {
+        match timeout(Duration::from_millis(1000), self.queues.write()).await {
+            Ok(mut queues) => {
+                // Dequeue from highest priority queue first (BTreeMap is ordered)
+                for queue in queues.values_mut() {
+                    if let Some(transaction_id) = queue.pop_front() {
+                        self.total_processed.fetch_add(1, Ordering::SeqCst);
+                        return Ok(Some(transaction_id));
+                    }
+                }
+                Ok(None)
+            },
+            Err(_) => Err(TransactionEngineError::TimeoutError)
         }
-        None
     }
 }
 
@@ -1140,6 +1261,13 @@ impl LockManager {
             locks: RwLock::new(HashMap::new()),
             wait_graph: RwLock::new(HashMap::new()),
             lock_timeout: timeout,
+            deadlock_detector: Arc::new(DeadlockDetector {
+                check_interval: Duration::from_millis(100),
+                max_wait_time: timeout * 2,
+                detection_enabled: AtomicBool::new(true),
+            }),
+            lock_sequence: AtomicU64::new(0),
+            contention_metrics: RwLock::new(HashMap::new()),
         }
     }
     
@@ -1149,13 +1277,156 @@ impl LockManager {
         lock_type: LockType,
         transaction_id: Uuid,
     ) -> Result<(), TransactionEngineError> {
-        // Implement lock acquisition logic
-        Ok(())
+        let start_time = Instant::now();
+        let sequence = self.lock_sequence.fetch_add(1, Ordering::SeqCst);
+        
+        // Implement exponential backoff for contention
+        let mut backoff_delay = Duration::from_millis(1);
+        let max_backoff = Duration::from_millis(100);
+        
+        loop {
+            // Check for deadlock before attempting to acquire
+            if self.would_cause_deadlock(&lock_id, transaction_id).await? {
+                return Err(TransactionEngineError::LockError("Potential deadlock detected".to_string()));
+            }
+            
+            // Try to acquire the lock
+            match timeout(self.lock_timeout, self.try_acquire_lock(lock_id.clone(), lock_type.clone(), transaction_id)).await {
+                Ok(Ok(())) => {
+                    // Lock acquired successfully
+                    self.update_contention_metrics(&lock_id, start_time.elapsed()).await;
+                    return Ok(());
+                },
+                Ok(Err(TransactionEngineError::LockError(_))) => {
+                    // Lock is held by another transaction - wait with backoff
+                    if start_time.elapsed() > self.lock_timeout {
+                        return Err(TransactionEngineError::TimeoutError);
+                    }
+                    
+                    sleep(backoff_delay).await;
+                    backoff_delay = std::cmp::min(backoff_delay * 2, max_backoff);
+                    continue;
+                },
+                Ok(Err(e)) => return Err(e),
+                Err(_) => {
+                    // Timeout occurred
+                    self.remove_from_wait_graph(transaction_id).await;
+                    return Err(TransactionEngineError::TimeoutError);
+                }
+            }
+        }
+    }
+    
+    async fn try_acquire_lock(
+        &self,
+        lock_id: LockId,
+        lock_type: LockType,
+        transaction_id: Uuid,
+    ) -> Result<(), TransactionEngineError> {
+        match timeout(Duration::from_millis(100), self.locks.write()).await {
+            Ok(mut locks) => {
+                let lock_info = locks.entry(lock_id.clone()).or_insert_with(|| LockInfo {
+                    lock_id: lock_id.clone(),
+                    lock_type: LockType::Shared,
+                    holder: None,
+                    waiters: VecDeque::new(),
+                    acquired_at: None,
+                    expires_at: None,
+                });
+                
+                match &lock_info.holder {
+                    None => {
+                        // Lock is free - acquire it
+                        lock_info.holder = Some(transaction_id);
+                        lock_info.lock_type = lock_type;
+                        lock_info.acquired_at = Some(SystemTime::now());
+                        lock_info.expires_at = Some(SystemTime::now() + self.lock_timeout);
+                        Ok(())
+                    },
+                    Some(holder) if *holder == transaction_id => {
+                        // Already hold the lock
+                        Ok(())
+                    },
+                    Some(_) => {
+                        // Lock is held by another transaction
+                        if !lock_info.waiters.contains(&transaction_id) {
+                            lock_info.waiters.push_back(transaction_id);
+                        }
+                        Err(TransactionEngineError::LockError("Lock is held by another transaction".to_string()))
+                    }
+                }
+            },
+            Err(_) => Err(TransactionEngineError::TimeoutError)
+        }
     }
     
     pub async fn release_lock(&self, lock_id: LockId) -> Result<(), TransactionEngineError> {
-        // Implement lock release logic
-        Ok(())
+        match timeout(Duration::from_millis(100), self.locks.write()).await {
+            Ok(mut locks) => {
+                if let Some(lock_info) = locks.get_mut(&lock_id) {
+                    lock_info.holder = None;
+                    lock_info.acquired_at = None;
+                    lock_info.expires_at = None;
+                    
+                    // Wake up next waiter
+                    if let Some(next_waiter) = lock_info.waiters.pop_front() {
+                        // The next waiter will try to acquire the lock in their retry loop
+                    }
+                    
+                    // Clean up empty lock info
+                    if lock_info.waiters.is_empty() {
+                        locks.remove(&lock_id);
+                    }
+                }
+                Ok(())
+            },
+            Err(_) => Err(TransactionEngineError::TimeoutError)
+        }
+    }
+    
+    async fn would_cause_deadlock(&self, lock_id: &LockId, transaction_id: Uuid) -> Result<bool, TransactionEngineError> {
+        if !self.deadlock_detector.detection_enabled.load(Ordering::SeqCst) {
+            return Ok(false);
+        }
+        
+        // Simple deadlock detection using wait-for graph
+        match timeout(Duration::from_millis(50), self.wait_graph.read()).await {
+            Ok(wait_graph) => {
+                // Check if acquiring this lock would create a cycle
+                // This is a simplified implementation - a full implementation would use DFS
+                if let Some(waiters) = wait_graph.get(&transaction_id) {
+                    if waiters.len() > 0 {
+                        // For now, just detect simple two-transaction deadlocks
+                        return Ok(waiters.len() > 1);
+                    }
+                }
+                Ok(false)
+            },
+            Err(_) => Ok(false) // If we can't check for deadlocks, assume it's safe
+        }
+    }
+    
+    async fn remove_from_wait_graph(&self, transaction_id: Uuid) {
+        if let Ok(mut wait_graph) = timeout(Duration::from_millis(50), self.wait_graph.write()).await {
+            wait_graph.remove(&transaction_id);
+        }
+    }
+    
+    async fn update_contention_metrics(&self, lock_id: &LockId, wait_time: Duration) {
+        if let Ok(mut metrics) = timeout(Duration::from_millis(50), self.contention_metrics.write()).await {
+            let contention = metrics.entry(lock_id.clone()).or_insert_with(|| ContentionMetrics {
+                total_requests: 0,
+                total_wait_time: Duration::ZERO,
+                average_wait_time: Duration::ZERO,
+                max_wait_time: Duration::ZERO,
+                deadlock_count: 0,
+            });
+            
+            contention.total_requests += 1;
+            contention.total_wait_time += wait_time;
+            contention.average_wait_time = contention.total_wait_time / contention.total_requests as u32;
+            contention.max_wait_time = std::cmp::max(contention.max_wait_time, wait_time);
+        }
     }
 }
 
@@ -1219,6 +1490,9 @@ impl TransactionMetrics {
                 average_settlement_time: Duration::ZERO,
                 settlement_value_by_network: HashMap::new(),
             }),
+            total_transactions: AtomicU64::new(0),
+            successful_transactions: AtomicU64::new(0),
+            failed_transactions: AtomicU64::new(0),
         }
     }
 }

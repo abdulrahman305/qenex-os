@@ -21,6 +21,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -638,13 +639,18 @@ type ProtocolEngine struct {
 	// Configuration
 	config         *ProtocolConfig
 	
-	// Concurrency control
+	// Concurrency control with enhanced synchronization
 	workers        int
 	shutdown       chan struct{}
 	wg             sync.WaitGroup
+	shutdownOnce   sync.Once
+	isShutdown     int64 // atomic flag
 	
-	// Message tracking
+	// Message tracking with cleanup
 	messageTracker *MessageTracker
+	
+	// Worker coordination
+	workerSemaphore *semaphore.Weighted
 }
 
 type ProtocolConfig struct {
@@ -667,6 +673,11 @@ type ProtocolMetrics struct {
 	TransformationErrors int64 `json:"transformation_errors"`
 	RoutingErrors       int64 `json:"routing_errors"`
 	
+	// Internal atomic counters for metrics calculation
+	totalLatency        int64
+	latencyCount        int64
+	lastProcessedCount  int64
+	
 	mutex sync.RWMutex
 }
 
@@ -687,8 +698,11 @@ type MessageRouter struct {
 }
 
 type MessageTracker struct {
-	messages map[string]*MessageStatus
-	mutex    sync.RWMutex
+	messages    map[string]*MessageStatus
+	mutex       sync.RWMutex
+	cleanupChan chan string
+	done        chan struct{}
+	wg          sync.WaitGroup
 }
 
 type MessageStatus struct {
@@ -703,18 +717,20 @@ type MessageStatus struct {
 
 func NewProtocolEngine(config *ProtocolConfig, logger *zap.Logger) *ProtocolEngine {
 	engine := &ProtocolEngine{
-		handlers:       make(map[string]ProtocolHandler),
-		messageQueue:   make(chan *UniversalMessage, config.QueueSize),
-		rateLimiter:    rate.NewLimiter(config.RateLimit, int(config.RateLimit)),
-		metrics:        &ProtocolMetrics{},
-		logger:         logger,
-		validator:      NewMessageValidator(),
-		transformer:    NewMessageTransformer(),
-		router:         NewMessageRouter(),
-		config:         config,
-		workers:        config.MaxWorkers,
-		shutdown:       make(chan struct{}),
-		messageTracker: NewMessageTracker(),
+		handlers:        make(map[string]ProtocolHandler),
+		messageQueue:    make(chan *UniversalMessage, config.QueueSize),
+		rateLimiter:     rate.NewLimiter(config.RateLimit, int(config.RateLimit)),
+		metrics:         &ProtocolMetrics{},
+		logger:          logger,
+		validator:       NewMessageValidator(),
+		transformer:     NewMessageTransformer(),
+		router:          NewMessageRouter(),
+		config:          config,
+		workers:         config.MaxWorkers,
+		shutdown:        make(chan struct{}),
+		messageTracker:  NewMessageTracker(),
+		workerSemaphore: semaphore.NewWeighted(int64(config.MaxWorkers)),
+		isShutdown:      0,
 	}
 	
 	// Register built-in handlers
@@ -730,9 +746,17 @@ func (pe *ProtocolEngine) RegisterHandler(protocol string, handler ProtocolHandl
 }
 
 func (pe *ProtocolEngine) Start(ctx context.Context) error {
+	// Check if already running
+	if atomic.LoadInt64(&pe.isShutdown) == 1 {
+		return fmt.Errorf("engine is shutting down")
+	}
+	
 	pe.logger.Info("Starting protocol engine", zap.Int("workers", pe.workers))
 	
-	// Start worker goroutines
+	// Start message tracker cleanup goroutine first
+	pe.messageTracker.Start()
+	
+	// Start worker goroutines with semaphore control
 	for i := 0; i < pe.workers; i++ {
 		pe.wg.Add(1)
 		go pe.worker(ctx, i)
@@ -746,10 +770,26 @@ func (pe *ProtocolEngine) Start(ctx context.Context) error {
 }
 
 func (pe *ProtocolEngine) Stop() error {
-	pe.logger.Info("Stopping protocol engine")
-	close(pe.shutdown)
-	pe.wg.Wait()
-	pe.logger.Info("Protocol engine stopped")
+	pe.shutdownOnce.Do(func() {
+		pe.logger.Info("Stopping protocol engine")
+		
+		// Set shutdown flag atomically
+		atomic.StoreInt64(&pe.isShutdown, 1)
+		
+		// Close shutdown channel to signal workers
+		close(pe.shutdown)
+		
+		// Close message queue to prevent new messages
+		close(pe.messageQueue)
+		
+		// Stop message tracker
+		pe.messageTracker.Stop()
+		
+		// Wait for all workers to finish
+		pe.wg.Wait()
+		
+		pe.logger.Info("Protocol engine stopped")
+	})
 	return nil
 }
 
@@ -806,10 +846,11 @@ func (pe *ProtocolEngine) ProcessMessage(ctx context.Context, data []byte, proto
 		}
 	}
 	
-	// Update metrics
+	// Update metrics atomically
 	latency := time.Since(start).Milliseconds()
 	atomic.AddInt64(&pe.metrics.MessagesProcessed, 1)
-	atomic.AddInt64(&pe.metrics.AverageLatency, latency)
+	atomic.AddInt64(&pe.metrics.totalLatency, latency)
+	atomic.AddInt64(&pe.metrics.latencyCount, 1)
 	
 	pe.messageTracker.UpdateMessage(msg.ID, "processed", map[string]interface{}{"latency_ms": latency})
 	
@@ -824,11 +865,25 @@ func (pe *ProtocolEngine) worker(ctx context.Context, workerID int) {
 	for {
 		select {
 		case <-ctx.Done():
+			pe.logger.Info("Worker stopping due to context cancellation", zap.Int("worker_id", workerID))
 			return
 		case <-pe.shutdown:
+			pe.logger.Info("Worker stopping due to shutdown signal", zap.Int("worker_id", workerID))
 			return
-		case msg := <-pe.messageQueue:
+		case msg, ok := <-pe.messageQueue:
+			if !ok {
+				pe.logger.Info("Worker stopping due to closed message queue", zap.Int("worker_id", workerID))
+				return
+			}
+			
+			// Acquire semaphore before processing (with timeout)
+			if err := pe.workerSemaphore.Acquire(ctx, 1); err != nil {
+				pe.logger.Warn("Failed to acquire worker semaphore", zap.Error(err))
+				continue
+			}
+			
 			pe.processMessageAsync(ctx, msg)
+			pe.workerSemaphore.Release(1)
 		}
 	}
 }
@@ -880,14 +935,26 @@ func (pe *ProtocolEngine) collectMetrics() {
 	pe.metrics.mutex.Lock()
 	defer pe.metrics.mutex.Unlock()
 	
-	// Calculate TPS
-	pe.metrics.ThroughputTPS = atomic.LoadInt64(&pe.metrics.MessagesProcessed) / 60
+	// Calculate TPS based on delta
+	currentProcessed := atomic.LoadInt64(&pe.metrics.MessagesProcessed)
+	pe.metrics.ThroughputTPS = (currentProcessed - pe.metrics.lastProcessedCount) / 60
+	pe.metrics.lastProcessedCount = currentProcessed
+	
+	// Calculate average latency atomically
+	totalLatency := atomic.LoadInt64(&pe.metrics.totalLatency)
+	latencyCount := atomic.LoadInt64(&pe.metrics.latencyCount)
+	if latencyCount > 0 {
+		pe.metrics.AverageLatency = totalLatency / latencyCount
+	}
 	
 	pe.logger.Info("Protocol engine metrics",
 		zap.Int64("messages_processed", pe.metrics.MessagesProcessed),
 		zap.Int64("messages_failed", pe.metrics.MessagesFailed),
 		zap.Int64("throughput_tps", pe.metrics.ThroughputTPS),
-		zap.Int64("average_latency_ms", pe.metrics.AverageLatency))
+		zap.Int64("average_latency_ms", pe.metrics.AverageLatency),
+		zap.Int64("validation_failures", pe.metrics.ValidationFailures),
+		zap.Int64("transformation_errors", pe.metrics.TransformationErrors),
+		zap.Int64("routing_errors", pe.metrics.RoutingErrors))
 }
 
 // Utility functions
@@ -1070,7 +1137,9 @@ func NewMessageRouter() *MessageRouter {
 
 func NewMessageTracker() *MessageTracker {
 	return &MessageTracker{
-		messages: make(map[string]*MessageStatus),
+		messages:    make(map[string]*MessageStatus),
+		cleanupChan: make(chan string, 1000),
+		done:        make(chan struct{}),
 	}
 }
 
@@ -1155,6 +1224,63 @@ func (mr *MessageRouter) Route(msg *UniversalMessage) error {
 	}
 	
 	return nil
+}
+
+// MessageTracker methods
+func (mt *MessageTracker) Start() {
+	mt.wg.Add(1)
+	go mt.cleanupWorker()
+}
+
+func (mt *MessageTracker) Stop() {
+	close(mt.done)
+	mt.wg.Wait()
+}
+
+func (mt *MessageTracker) cleanupWorker() {
+	defer mt.wg.Done()
+	
+	cleanupTicker := time.NewTicker(5 * time.Minute)
+	defer cleanupTicker.Stop()
+	
+	for {
+		select {
+		case <-mt.done:
+			return
+		case <-cleanupTicker.C:
+			mt.cleanupOldMessages()
+		case msgID := <-mt.cleanupChan:
+			mt.removeMessage(msgID)
+		}
+	}
+}
+
+func (mt *MessageTracker) cleanupOldMessages() {
+	mt.mutex.Lock()
+	defer mt.mutex.Unlock()
+	
+	cutoff := time.Now().Add(-1 * time.Hour) // Remove messages older than 1 hour
+	toDelete := make([]string, 0)
+	
+	for id, status := range mt.messages {
+		if status.UpdatedAt.Before(cutoff) {
+			toDelete = append(toDelete, id)
+		}
+	}
+	
+	for _, id := range toDelete {
+		delete(mt.messages, id)
+	}
+	
+	if len(toDelete) > 0 {
+		// Logger would go here if available
+	}
+}
+
+func (mt *MessageTracker) removeMessage(id string) {
+	mt.mutex.Lock()
+	defer mt.mutex.Unlock()
+	delete(mt.messages, id)
 }
 
 func (mt *MessageTracker) TrackMessage(id, status string, metadata map[string]interface{}) {
