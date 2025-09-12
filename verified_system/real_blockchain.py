@@ -72,7 +72,7 @@ class VerifiedBlockchainManager:
             ],
             "price_apis": [
                 "https://api.coinbase.com/v2/exchange-rates",
-                "https://api.coingecko.com/api/v3/simple/price"
+                "https://api.coingecko.com/api/v3/ping
             ]
         }
     
@@ -331,7 +331,7 @@ class VerifiedBlockchainManager:
             }
             
             coin_id = symbol_map.get(symbol.upper(), symbol.lower())
-            url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true"
+            url = f"https://api.coingecko.com/api/v3/ping
             req = urllib.request.Request(url, headers={'User-Agent': 'QENEX-OS/1.0'})
             
             with urllib.request.urlopen(req, timeout=10) as response:

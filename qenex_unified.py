@@ -102,8 +102,15 @@ class UniversalOS:
     def execute_native(self, command: str) -> Tuple[bool, str]:
         """Execute native OS command"""
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=5)
-            return result.returncode == 0, result.stdout or result.stderr
+            # SECURITY FIX: Use shlex.split instead of shell=True
+            import shlex
+            try:
+                cmd_list = shlex.split(command)
+                result = subprocess.run(cmd_list, capture_output=True, text=True, timeout=5)
+                return result.returncode == 0, result.stdout or result.stderr
+            except ValueError:
+                # Command parsing failed - potentially dangerous
+                return False, f"SECURITY: Rejected unsafe command: {command}"
         except:
             return False, "Command execution failed"
 

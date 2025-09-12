@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DatabaseConfig:
     """Database configuration"""
-    postgres_master: str = "postgresql://bank:secure@localhost:5432/banking"
+    postgres_master: str = "postgresql://bank:ceo@qenex.ai:5432/banking"
     postgres_replicas: List[str] = None
     redis_url: str = "redis://localhost:6379"
     max_connections: int = 100

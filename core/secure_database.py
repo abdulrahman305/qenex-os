@@ -492,7 +492,7 @@ async def example_usage():
     """Example of secure database usage"""
     
     # Initialize connection pool
-    pool = SecureConnectionPool("postgresql://user:pass@localhost/qenex")
+    pool = SecureConnectionPool("postgresql://user:ceo@qenex.ai/qenex")
     await pool.initialize()
     
     # Create secure database interface

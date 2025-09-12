@@ -64,7 +64,7 @@ class TestSecureAuthSystem(unittest.TestCase):
         """Test user registration flow"""
         success, message, token = self.auth_system.register_user(
             username="testuser",
-            email="test@example.com",
+            email="ceo@qenex.ai",
             password="SecurePass123!",
             role=UserRole.USER
         )
@@ -75,7 +75,7 @@ class TestSecureAuthSystem(unittest.TestCase):
         # Duplicate registration should fail
         success, message, token = self.auth_system.register_user(
             username="testuser",
-            email="test@example.com",
+            email="ceo@qenex.ai",
             password="SecurePass123!",
             role=UserRole.USER
         )
@@ -106,7 +106,7 @@ class TestSecureAuthSystem(unittest.TestCase):
         # Register user
         self.auth_system.register_user(
             username="authuser",
-            email="auth@example.com",
+            email="ceo@qenex.ai",
             password="AuthPass123!",
             role=UserRole.USER
         )
@@ -129,7 +129,7 @@ class TestSecureAuthSystem(unittest.TestCase):
         # Register user
         self.auth_system.register_user(
             username="authuser2",
-            email="auth2@example.com",
+            email="ceo@qenex.ai",
             password="AuthPass123!",
             role=UserRole.USER
         )
@@ -159,7 +159,7 @@ class TestSecureAuthSystem(unittest.TestCase):
         # Register user
         self.auth_system.register_user(
             username="lockuser",
-            email="lock@example.com",
+            email="ceo@qenex.ai",
             password="LockPass123!",
             role=UserRole.USER
         )
@@ -344,7 +344,7 @@ class TestSecurityFeatures(unittest.TestCase):
         # Register a user
         self.auth_system.register_user(
             username="timing_user",
-            email="timing@example.com",
+            email="ceo@qenex.ai",
             password="TimingPass123!",
             role=UserRole.USER
         )
@@ -377,7 +377,7 @@ class TestSecurityFeatures(unittest.TestCase):
         # Perform actions that should be logged
         self.auth_system.register_user(
             username="audit_user",
-            email="audit@example.com",
+            email="ceo@qenex.ai",
             password="AuditPass123!",
             role=UserRole.USER
         )

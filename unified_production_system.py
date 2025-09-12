@@ -566,8 +566,8 @@ async def main():
     print(f"🤖 AI: Generation {status['security']['evolution_generation']}")
     print(f"⛓️ Blockchain: Height {status['blockchain']['height']}")
     print(f"💰 DeFi: ${status['defi']['total_value_locked']} TVL")
-    print(f"\n🌐 API Server: http://localhost:8080")
-    print(f"📊 Dashboard: http://localhost:8080/dashboard")
+    print(f"\n🌐 API Server: https://abdulrahman305.github.io/qenex-docs)
+    print(f"📊 Dashboard: https://abdulrahman305.github.io/qenex-docs)
     
     # Run forever
     try:

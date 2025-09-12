@@ -494,7 +494,7 @@ if __name__ == "__main__":
         _table_name = 'users'
     
     # Create user
-    user = User(username='test_user', email='test@example.com')
+    user = User(username='test_user', email='ceo@qenex.ai')
     user.save(db.pool)
     
     # Find user

@@ -185,7 +185,7 @@ Legend: ✅ Fully Supported | ⚠️ Experimental | ❌ Not Supported
 ### Community Support
 - Discord: [Join our server](https://discord.gg/qenex)
 - GitHub Discussions: [Ask questions](https://github.com/abdulrahman305/qenex-os/discussions)
-- Email: support@qenex.ai
+- Email: ceo@qenex.ai
 
 ## Contributing
 

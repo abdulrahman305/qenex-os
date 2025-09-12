@@ -348,7 +348,13 @@ class SelfHealer:
             
             # Clear system caches (Linux)
             if sys.platform == 'linux':
-                os.system('sync && echo 3 > /proc/sys/vm/drop_caches 2>/dev/null')
+                # SECURITY FIX: Use direct file I/O instead of os.system
+                try:
+                    os.sync()  # Sync filesystems
+                    with open('/proc/sys/vm/drop_caches', 'w') as f:
+                        f.write('3')
+                except (OSError, IOError):
+                    pass  # Insufficient permissions
             
             return True
         except:
@@ -442,9 +448,13 @@ class SelfHealer:
     async def _reset_network(self, issue: Issue) -> bool:
         """Reset network connections"""
         try:
-            # Reset network stack
+            # SECURITY FIX: Use subprocess instead of os.system for network restart
             if sys.platform == 'linux':
-                os.system('systemctl restart networking 2>/dev/null')
+                try:
+                    subprocess.run(['systemctl', 'restart', 'networking'], 
+                                 capture_output=True, timeout=30)
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+                    pass  # Service not available or insufficient permissions
             return True
         except:
             return False

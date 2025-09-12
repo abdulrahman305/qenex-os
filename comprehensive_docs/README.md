@@ -682,12 +682,12 @@ top -p $(pgrep -f qenex)
 ## 📞 SUPPORT & CONTACT
 
 ### Technical Support
-- **Email:** support@qenex.ai
+- **Email:** ceo@qenex.ai
 - **Discord:** [QENEX Community](https://discord.gg/qenex)
 - **GitHub Issues:** [Report Issues](https://github.com/abdulrahman305/qenex-os/issues)
 
 ### Security Issues
-- **Email:** security@qenex.ai
+- **Email:** ceo@qenex.ai
 - **PGP Key:** [Download Public Key](https://qenex.ai/security.asc)
 - **Bug Bounty:** [HackerOne Program](https://hackerone.com/qenex)
 

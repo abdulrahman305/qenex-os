@@ -186,7 +186,7 @@ class WorkingBlockchain:
         import aiohttp
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd') as resp:
+                async with session.get('https://api.coingecko.com/api/v3/ping) as resp:
                     data = await resp.json()
                     self.eth_price = data['ethereum']['usd']
                     return self.eth_price

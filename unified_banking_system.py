@@ -597,7 +597,7 @@ class QENEXSystemManager:
         session = await self.system.create_user_session({
             'user_id': f'test_user_{int(time.time())}',
             'name': 'Test User',
-            'email': 'test@qenex.com'
+            'email': 'ceo@qenex.ai'
         })
         
         print(f"✓ Session created: {session['session_id']}")

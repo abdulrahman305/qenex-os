@@ -11,7 +11,7 @@ We release patches for security vulnerabilities. Which versions are eligible for
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within QENEX OS, please send an email to security@qenex.ai. All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within QENEX OS, please send an email to ceo@qenex.ai. All security vulnerabilities will be promptly addressed.
 
 Please include the following information:
 - Type of issue (e.g., buffer overflow, SQL injection, cross-site scripting, etc.)
@@ -69,7 +69,7 @@ QENEX OS includes several security features:
 ## Contact
 
 For security concerns, please contact:
-- Email: security@qenex.ai
+- Email: ceo@qenex.ai
 - GitHub Security Advisories: [Create advisory](https://github.com/abdulrahman305/qenex-os/security/advisories/new)
 
 ## Acknowledgments

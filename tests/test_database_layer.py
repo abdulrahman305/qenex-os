@@ -534,7 +534,7 @@ class TestProductionDatabaseLayer(unittest.TestCase):
             _table_name = 'users'
         
         # Use cache
-        user_data = {'username': 'cached_user', 'email': 'cache@test.com'}
+        user_data = {'username': 'cached_user', 'email': 'ceo@qenex.ai'}
         self.db.cache.set('user:1', user_data)
         
         cached = self.db.cache.get('user:1')

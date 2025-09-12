@@ -82,8 +82,17 @@ class RealProcessManager:
                      shell: bool = False, cwd: str = None) -> Optional[int]:
         """Start a new process and return its PID"""
         try:
+            # SECURITY FIX: Disable shell=True for security
             if shell:
-                proc = subprocess.Popen(command, shell=True, cwd=cwd)
+                # Parse shell command safely
+                import shlex
+                try:
+                    cmd_list = shlex.split(command)
+                    proc = subprocess.Popen(cmd_list, cwd=cwd)
+                except ValueError:
+                    # If shlex fails, reject the command
+                    print(f"SECURITY: Rejected unsafe shell command: {command}")
+                    return None
             else:
                 cmd_list = [command] + (args or [])
                 proc = subprocess.Popen(cmd_list, cwd=cwd)

@@ -348,4 +348,4 @@ Comprehensive audit logging:
 
 - Documentation: https://docs.qenex.ai
 - Issues: https://github.com/abdulrahman305/qenex-os/issues
-- Security: security@qenex.ai
+- Security: ceo@qenex.ai

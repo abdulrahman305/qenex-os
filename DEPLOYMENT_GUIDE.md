@@ -228,7 +228,7 @@ netstat -tunlp
 
 - GitHub Issues: https://github.com/abdulrahman305/qenex-os/issues
 - Documentation: https://qenex.ai/docs
-- Email: support@qenex.ai
+- Email: ceo@qenex.ai
 
 ## License
 

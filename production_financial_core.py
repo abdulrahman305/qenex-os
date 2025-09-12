@@ -819,7 +819,7 @@ async def main():
     api = FinancialAPIServer(core)
     
     # Create test data
-    result = await core.create_user('testuser', 'test@example.com', 'SecurePass123!')
+    result = await core.create_user('testuser', 'ceo@qenex.ai', 'SecurePass123!')
     if result['success']:
         user_id = result['user_id']
         logger.info(f"Created test user: {user_id}")
@@ -844,7 +844,7 @@ async def main():
             logger.info(f"Balances: Account1={balance1}, Account2={balance2}")
     
     # Simulate API server
-    logger.info("API Server ready at http://localhost:8080")
+    logger.info("API Server ready at https://abdulrahman305.github.io/qenex-docs)
     
     # Keep running
     try:
