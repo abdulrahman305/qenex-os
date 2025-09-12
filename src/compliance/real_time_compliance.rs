@@ -909,7 +909,7 @@ impl ComplianceScreeningResult {
         // Add scores from other screening results
         // ... complex scoring logic
         
-        self.overall_risk_score = score.min(1.0);
+        self.overall_risk_score = score.min(1.0) as f64;
         
         self.overall_status = if score > 0.8 {
             ComplianceStatus::HighRisk

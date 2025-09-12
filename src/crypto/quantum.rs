@@ -546,8 +546,8 @@ impl QuantumResistantEngine {
                     metadata: KeyMetadata {
                         created_at: SystemTime::now(),
                         expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(365 * 24 * 3600)),
-                        last_used: RwLock::new(SystemTime::now()),
-                        usage_count: RwLock::new(0),
+                        last_used: SystemTime::now(),
+                        usage_count: 0,
                         creator_process_id: None,
                         key_purpose: purpose,
                         compliance_tags: vec!["NIST-PQC".to_string(), "BANKING-APPROVED".to_string()],
@@ -653,7 +653,7 @@ impl QuantumResistantEngine {
             metadata: KeyMetadata {
                 created_at: SystemTime::now(),
                 expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(90 * 24 * 3600)), // 90 days
-                last_used: RwLock::new(SystemTime::now()),
+                last_used: SystemTime::now(),
                 usage_count: RwLock::new(0),
                 creator_process_id: None,
                 key_purpose: purpose,
@@ -860,7 +860,7 @@ impl QuantumResistantEngine {
             private_key_data,
             public_key_hash: public_key_hash.try_into().unwrap_or([0u8; 32]),
             created_at: SystemTime::now(),
-            last_used: RwLock::new(SystemTime::now()),
+            last_used: SystemTime::now(),
         };
         
         Ok((public_key, private_key))

@@ -128,7 +128,7 @@ pub struct SDNEntry {
     pub remarks: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum EntityType {
     Individual,
     Entity,
@@ -136,7 +136,7 @@ pub enum EntityType {
     Aircraft,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Address {
     pub address_1: Option<String>,
     pub address_2: Option<String>,
@@ -156,7 +156,7 @@ pub enum AddressType {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Identification {
     pub id_type: String,
     pub id_number: String,
@@ -224,7 +224,7 @@ pub struct PEPRecord {
     pub last_updated: SystemTime,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GovernmentLevel {
     National,
     Regional,
@@ -234,7 +234,7 @@ pub enum GovernmentLevel {
     Judicial,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PEPCategory {
     HeadOfState,
     HeadOfGovernment,
@@ -250,7 +250,7 @@ pub enum PEPCategory {
     CloseAssociate,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RiskLevel {
     Low,
     Medium,
@@ -258,14 +258,14 @@ pub enum RiskLevel {
     Critical,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FamilyMember {
     pub name: String,
     pub relationship: String,
     pub country: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CloseAssociate {
     pub name: String,
     pub relationship_type: String,
@@ -312,7 +312,7 @@ pub struct ScreeningResult {
     pub confidence_score: f64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceMatch {
     pub match_id: Uuid,
     pub match_type: MatchType,
@@ -342,7 +342,7 @@ pub struct MatchDetails {
     pub expiration_date: Option<SystemTime>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ScreeningRecommendation {
     Approve,
     Review,
@@ -874,10 +874,11 @@ pub struct FuzzyMatchingEngine;
 pub struct ScreeningMetrics;
 pub struct RuleEvaluator;
 pub struct RuleVersionControl;
+#[derive(Debug, Clone)]
 pub struct OFACUpdate;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct EUUpdate;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct UNUpdate;
 
 impl OFACFeed {
