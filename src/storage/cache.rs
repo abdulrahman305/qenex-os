@@ -4,7 +4,7 @@
 //! and performance optimization for financial operations
 
 use super::{CoreError, Result, Account, AccountBalance};
-use redis::{aio::ConnectionManager, AsyncCommands, Client};
+use redis::{aio::Connection, AsyncCommands, Client};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use rust_decimal::Decimal;
@@ -75,7 +75,7 @@ pub struct CacheStats {
 
 /// Main cache manager
 pub struct CacheManager {
-    connection: Arc<RwLock<ConnectionManager>>,
+    connection: Arc<RwLock<Connection>>,
     config: CacheConfig,
     stats: Arc<RwLock<CacheStats>>,
 }

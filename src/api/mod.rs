@@ -14,7 +14,7 @@ use rust_decimal::Decimal;
 
 use crate::core::BankingCore;
 use crate::transaction::{TransactionRequest, TransactionStatus};
-use crate::compliance::{ScreeningRequest, ComplianceResult};
+use crate::compliance::{ScreeningResult, ComplianceRule};
 use crate::monitoring::MetricsCollector;
 
 pub struct ApiServer {
@@ -103,9 +103,8 @@ impl ApiServer {
         let addr = format!("{}:{}", self.config.host, self.config.port);
         tracing::info!("API server listening on {}", addr);
 
-        axum::Server::bind(&addr.parse()?)
-            .serve(app.into_make_service())
-            .await?;
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        axum::serve(listener, app.into_make_service()).await?;
 
         Ok(())
     }

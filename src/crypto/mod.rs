@@ -45,19 +45,6 @@ pub use quantum::{
     QuantumCiphertext,
 };
 
-pub use quantum::{
-    QuantumResistantEngine, 
-    SignatureAlgorithm, 
-    KEMAlgorithm, 
-    SymmetricAlgorithm,
-    HashAlgorithm,
-    SecurityLevel,
-    KeyPurpose,
-    CryptoError,
-    QuantumSignature,
-    QuantumCiphertext,
-};
-
 #[cfg(feature = "std")]
 use std::sync::Arc;
 #[cfg(not(feature = "std"))]

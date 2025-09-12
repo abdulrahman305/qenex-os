@@ -173,13 +173,6 @@ pub struct VirtualAddressSpace {
     pub stack_size: u64,
 }
 
-#[derive(Debug, Clone)]
-pub struct PageTableEntry {
-    pub physical_address: u64,
-    pub flags: PageFlags,
-    pub encryption_key_id: Option<Uuid>,
-}
-
 bitflags::bitflags! {
     pub struct PageFlags: u32 {
         const READ = 1 << 0;
@@ -190,6 +183,13 @@ bitflags::bitflags! {
         const SECURE = 1 << 5;
         const BANKING_DATA = 1 << 6;
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct PageTableEntry {
+    pub physical_address: u64,
+    pub flags: PageFlags,
+    pub encryption_key_id: Option<Uuid>,
 }
 
 /// Secure heap manager for sensitive financial data

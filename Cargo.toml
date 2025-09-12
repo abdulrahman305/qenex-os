@@ -62,6 +62,18 @@ anyhow = "1.0"
 # Cache
 redis = { version = "0.23", features = ["aio", "tokio-comp"] }
 
+# HTTP client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+
+# Random number generation
+rand_core = "0.6"
+
+# Async utilities
+futures = "0.3"
+
+# Bit flags
+bitflags = "2.4"
+
 # Metrics
 metrics = "0.21"
 metrics-exporter-prometheus = "0.12"

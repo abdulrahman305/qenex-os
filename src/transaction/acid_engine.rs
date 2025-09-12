@@ -11,7 +11,9 @@ use std::collections::HashMap;
 use heapless::FnvIndexMap as HashMap;
 
 #[cfg(feature = "std")]
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::Arc;
+#[cfg(feature = "std")]
+use tokio::sync::{RwLock, Mutex};
 #[cfg(not(feature = "std"))]
 use spin::{RwLock, Mutex};
 
@@ -494,7 +496,7 @@ impl ACIDTransactionEngine {
         self.wal_manager.force_checkpoint().await?;
         
         // Update recovery information for all active transactions
-        let active_txns = self.active_transactions.read();
+        let active_txns = self.active_transactions.read().await;
         for (txn_id, txn) in active_txns.iter() {
             self.recovery_manager.update_recovery_info(*txn_id, txn).await?;
         }
@@ -782,7 +784,7 @@ impl WriteAheadLogManager {
     }
     
     async fn write_begin_entry(&self, txn_id: Uuid, transaction: &DistributedTransaction) -> Result<u64, ACIDError> {
-        let lsn = self.get_next_lsn();
+        let lsn = self.get_next_lsn().await;
         
         let entry = WALEntry {
             entry_id: lsn,
@@ -810,7 +812,7 @@ impl WriteAheadLogManager {
     }
     
     async fn write_commit_entry(&self, txn_id: Uuid, transaction: &DistributedTransaction) -> Result<u64, ACIDError> {
-        let lsn = self.get_next_lsn();
+        let lsn = self.get_next_lsn().await;
         
         let entry = WALEntry {
             entry_id: lsn,
@@ -838,7 +840,7 @@ impl WriteAheadLogManager {
     }
     
     async fn write_abort_entry(&self, txn_id: Uuid, transaction: &DistributedTransaction) -> Result<u64, ACIDError> {
-        let lsn = self.get_next_lsn();
+        let lsn = self.get_next_lsn().await;
         
         let entry = WALEntry {
             entry_id: lsn,
@@ -866,7 +868,7 @@ impl WriteAheadLogManager {
     }
     
     async fn write_operation_entry(&self, txn_id: Uuid, operation: &TransactionOperation) -> Result<u64, ACIDError> {
-        let lsn = self.get_next_lsn();
+        let lsn = self.get_next_lsn().await;
         
         let entry = WALEntry {
             entry_id: lsn,
@@ -887,10 +889,12 @@ impl WriteAheadLogManager {
         // Force all pending WAL entries to stable storage
         #[cfg(feature = "std")]
         {
-            if let Some(ref mut file) = self.log_file.lock().as_mut() {
+            if let Ok(mut guard) = self.log_file.lock().await {
+                if let Some(ref mut file) = guard.as_mut() {
                 use std::io::Write;
-                file.flush().map_err(|_| ACIDError::WALError)?;
-                file.sync_all().map_err(|_| ACIDError::WALError)?;
+                    file.flush().map_err(|_| ACIDError::WALError)?;
+                    file.sync_all().map_err(|_| ACIDError::WALError)?;
+                }
             }
         }
         
@@ -902,18 +906,20 @@ impl WriteAheadLogManager {
         {
             use std::io::Write;
             
-            if let Some(ref mut file) = self.log_file.lock().as_mut() {
-                let serialized = bincode::serialize(entry)
-                    .map_err(|_| ACIDError::SerializationError)?;
-                file.write_all(&serialized).map_err(|_| ACIDError::WALError)?;
+            if let Ok(mut guard) = self.log_file.lock().await {
+                if let Some(ref mut file) = guard.as_mut() {
+                    let serialized = bincode::serialize(entry)
+                        .map_err(|_| ACIDError::SerializationError)?;
+                    file.write_all(&serialized).map_err(|_| ACIDError::WALError)?;
+                }
             }
         }
         
         Ok(())
     }
     
-    fn get_next_lsn(&self) -> u64 {
-        let mut lsn = self.next_lsn.lock();
+    async fn get_next_lsn(&self) -> u64 {
+        let mut lsn = self.next_lsn.lock().await;
         let current = *lsn;
         *lsn += 1;
         current

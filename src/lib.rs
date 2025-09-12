@@ -79,7 +79,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const BUILD_INFO: &str = concat!(
     env!("CARGO_PKG_VERSION"), 
     " (", 
-    env!("VERGEN_GIT_SHA_SHORT"),
+    env!("VERGEN_GIT_SHA_SHORT", "unknown"),
     ")"
 );
 
