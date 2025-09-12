@@ -469,7 +469,7 @@ impl BankingHSM {
     #[cfg(feature = "pkcs11")]
     fn hsm_sign_with_key(&self, data: &[u8], key_handle: CK_OBJECT_HANDLE, algorithm: SignatureAlgorithm) -> Result<Vec<u8>, PQCryptoError> {
         // Implementation would sign using HSM key
-        Ok(vec![0xSI, 0x6E, 0xED]) // Dummy signature
+        Ok(vec![0x51, 0x6E, 0xED]) // Dummy signature
     }
     
     fn get_operation_attestation(&self) -> Result<Vec<u8>, PQCryptoError> {

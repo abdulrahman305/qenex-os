@@ -908,10 +908,9 @@ impl WriteAheadLogManager {
             
             let mut guard = self.log_file.lock().await;
             if let Some(ref mut file) = guard.as_mut() {
-                    let serialized = bincode::serialize(entry)
-                        .map_err(|_| ACIDError::SerializationError)?;
-                    file.write_all(&serialized).map_err(|_| ACIDError::WALError)?;
-                }
+                let serialized = bincode::serialize(entry)
+                    .map_err(|_| ACIDError::SerializationError)?;
+                file.write_all(&serialized).map_err(|_| ACIDError::WALError)?;
             }
         }
         
