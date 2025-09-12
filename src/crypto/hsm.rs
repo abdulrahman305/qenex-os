@@ -286,7 +286,7 @@ impl BankingHSM {
                 dilithium_signature: vec![0xAB, 0xCD, 0xEF], // Dummy signature
                 sphincs_signature: Some(vec![0x12, 0x34, 0x56]),
                 timestamp: 1234567890,
-                hsm_attestation: vec![0xAT, 0xTE, 0x57], // Dummy attestation
+                hsm_attestation: vec![0xA7, 0x7E, 0x57], // Dummy attestation
             })
         }
     }
@@ -468,7 +468,7 @@ impl BankingHSM {
     
     fn get_operation_attestation(&self) -> Result<Vec<u8>, PQCryptoError> {
         // Implementation would generate cryptographic attestation of operation
-        Ok(vec![0xAT, 0x7E, 0x57, 0xED]) // Dummy attestation
+        Ok(vec![0xA7, 0x7E, 0x57, 0xED]) // Dummy attestation
     }
 }
 

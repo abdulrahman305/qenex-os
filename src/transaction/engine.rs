@@ -855,13 +855,16 @@ impl TransactionEngine {
     pub async fn get_metrics(&self) -> TransactionEngineMetrics {
         let metrics = self.metrics.clone();
         let active_count = self.active_transactions.read().await.len();
-        let queue_depths = metrics.queue_depths.read().await.clone();
+        let queue_depths = {
+            let guard = metrics.queue_depths.read().await;
+            guard.iter().map(|(k, v)| (k.clone(), v.load(Ordering::Relaxed))).collect()
+        };
         
         TransactionEngineMetrics {
             active_transactions: active_count as u64,
             queue_depths,
             total_processed: metrics.throughput_counters.read().await
-                .get("total_processed").copied().unwrap_or(0),
+                .get("total_processed").map(|v| v.load(Ordering::Relaxed)).unwrap_or(0),
             success_rate: self.calculate_success_rate().await,
             average_processing_time: self.calculate_average_processing_time().await,
             settlement_metrics: metrics.settlement_metrics.read().await.clone(),

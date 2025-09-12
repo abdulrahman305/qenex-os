@@ -129,19 +129,19 @@ async fn system_status(State(state): State<AppState>) -> impl IntoResponse {
 async fn create_transaction(
     State(state): State<AppState>,
     Json(req): Json<TransactionRequest>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.create_transaction(req).await {
         Ok(tx_id) => {
             state.metrics.increment_transaction_count();
             (StatusCode::CREATED, Json(TransactionResponse {
                 id: tx_id,
                 status: "created".to_string(),
-            }))
+            })).into_response()
         }
         Err(e) => {
             (StatusCode::BAD_REQUEST, Json(ErrorResponse {
                 error: e.to_string(),
-            }))
+            })).into_response()
         }
     }
 }
@@ -176,18 +176,18 @@ async fn transaction_status(
 async fn create_account(
     State(state): State<AppState>,
     Json(req): Json<CreateAccountRequest>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.create_account(req).await {
         Ok(account_id) => {
             (StatusCode::CREATED, Json(AccountResponse {
                 id: account_id,
                 status: "active".to_string(),
-            }))
+            })).into_response()
         }
         Err(e) => {
             (StatusCode::BAD_REQUEST, Json(ErrorResponse {
                 error: e.to_string(),
-            }))
+            })).into_response()
         }
     }
 }
@@ -209,16 +209,16 @@ async fn get_account(
 async fn get_balance(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.get_balance(&id).await {
         Ok(balance) => (StatusCode::OK, Json(BalanceResponse {
             account_id: id,
             balance,
             currency: "USD".to_string(),
-        })),
+        })).into_response(),
         Err(_) => (StatusCode::NOT_FOUND, Json(ErrorResponse {
             error: "Account not found".to_string(),
-        })),
+        })).into_response(),
     }
 }
 

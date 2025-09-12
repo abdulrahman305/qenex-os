@@ -786,14 +786,14 @@ pub struct UKScreener { /* ... */ }
 pub struct PEPScreener { /* ... */ }
 
 impl PEPScreener {
-    pub async fn new(_config: &str) -> Result<Self, ComplianceError> {
+    pub async fn new(_config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
         Ok(Self {})
     }
 }
 pub struct CountryRiskAssessor { /* ... */ }
 
 impl CountryRiskAssessor {
-    pub async fn new(_config: &str) -> Result<Self, ComplianceError> {
+    pub async fn new(_config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
         Ok(Self {})
     }
 }
@@ -1055,13 +1055,6 @@ macro_rules! impl_default_screening_result {
             pub screening_status: ScreeningStatus,
         }
         
-        impl Default for RiskLevel {
-            fn default() -> Self { RiskLevel::Low }
-        }
-        
-        impl Default for ScreeningStatus {
-            fn default() -> Self { ScreeningStatus::Clear }
-        }
     }
 }
 
@@ -1075,6 +1068,14 @@ impl_default_screening_result!(FATCAResult);
 impl_default_screening_result!(CRSResult);
 impl_default_screening_result!(AMLResult);
 impl_default_screening_result!(KYCResult);
+
+impl Default for RiskLevel {
+    fn default() -> Self { RiskLevel::Low }
+}
+
+impl Default for ScreeningStatus {
+    fn default() -> Self { ScreeningStatus::Clear }
+}
 
 // Additional required types
 #[derive(Debug, Clone, Serialize, Deserialize)]

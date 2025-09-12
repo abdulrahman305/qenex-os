@@ -142,7 +142,7 @@ impl StorageManager {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(config.max_connections)
             .min_connections(config.min_connections)
-            .connect_timeout(config.connect_timeout)
+            .acquire_timeout(config.connect_timeout)
             .idle_timeout(config.idle_timeout)
             .max_lifetime(config.max_lifetime)
             .connect(database_url)
