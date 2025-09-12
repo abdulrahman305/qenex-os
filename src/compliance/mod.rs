@@ -34,9 +34,10 @@ pub use live_feeds::{
     ScreeningResult,
     ComplianceMatch,
     ScreeningRecommendation,
-    EntityType,
-    RiskLevel,
 };
+
+// Use RiskLevel from real_time_compliance to avoid conflicts
+pub use real_time_compliance::RiskLevel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceRule {
@@ -132,20 +133,13 @@ pub struct WatchlistEntry {
     pub added_at: DateTime<Utc>,
 }
 
+// Define EntityType locally for this module
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityType {
     Individual,
     Organization,
     Country,
     Account,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RiskLevel {
-    Low,
-    Medium,
-    High,
-    Critical,
 }
 
 impl ComplianceEngine {
@@ -321,8 +315,7 @@ impl ComplianceEngine {
                     transaction.from_account.contains(name) || 
                     transaction.to_account.contains(name)) {
                     match entry.risk_level {
-                        RiskLevel::Critical => risk_score = 1.0,
-                        RiskLevel::High => risk_score = 0.9,
+                        RiskLevel::High => risk_score = 1.0, // Map High to Critical behavior
                         RiskLevel::Medium => risk_score = 0.6,
                         RiskLevel::Low => risk_score = 0.3,
                     }

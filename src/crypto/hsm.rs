@@ -11,6 +11,12 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 #[cfg(feature = "pkcs11")]
 use pkcs11::{Ctx, types::*};
 
+// Define PKCS#11 types when feature is not enabled
+#[cfg(not(feature = "pkcs11"))]
+pub type CK_SESSION_HANDLE = u64;
+#[cfg(not(feature = "pkcs11"))]
+pub type CK_OBJECT_HANDLE = u64;
+
 /// Hardware Security Module interface for banking operations
 pub struct BankingHSM {
     #[cfg(feature = "pkcs11")]

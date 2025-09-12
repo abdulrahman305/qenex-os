@@ -345,13 +345,13 @@ impl CacheManager {
     {
         let mut conn = self.connection.write().await;
         
-        let cached_json: Option<String> = conn.get::<_, Option<String>>(key)
+        let cached_json: Option<String> = conn.get(key)
             .await
             .map_err(|e| CoreError::StorageError(format!("Failed to get cache entry: {}", e)))?;
         
         match cached_json {
-            Some(json) => {
-                let entry: CacheEntry<T> = serde_json::from_str(&json)
+            Some(ref json) => {
+                let entry: CacheEntry<T> = serde_json::from_str(json)
                     .map_err(|e| CoreError::StorageError(format!("Failed to deserialize cache entry: {}", e)))?;
                 
                 if entry.is_expired() {

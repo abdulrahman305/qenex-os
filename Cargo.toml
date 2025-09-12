@@ -76,6 +76,7 @@ kernel = []
 pkcs11 = []
 pqcrypto-kyber = []
 pqcrypto-sphincsplus = []
+pqcrypto-dilithium = []
 
 [dev-dependencies]
 criterion = "0.5"

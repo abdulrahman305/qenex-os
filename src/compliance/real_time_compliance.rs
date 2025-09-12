@@ -10,8 +10,15 @@ use std::collections::HashMap;
 #[cfg(not(feature = "std"))]
 use heapless::FnvIndexMap as HashMap;
 
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(not(feature = "std"))]
+use alloc::{vec::Vec, string::String};
+
 #[cfg(feature = "std")]
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "std")]
+use tokio::sync::RwLock;
 #[cfg(not(feature = "std"))]
 use spin::{RwLock, Mutex};
 
@@ -509,16 +516,23 @@ impl RealTimeComplianceEngine {
 // Individual screening components
 
 /// OFAC (US Treasury) sanctions screening
+#[cfg(feature = "std")]
 pub struct OFACScreener {
-    #[cfg(feature = "std")]
     api_client: Client,
     config: OfficialAPIConfig,
     sanctions_cache: Arc<RwLock<Vec<OFACSanctionRecord>>>,
     last_update: Arc<RwLock<u64>>,
 }
 
+#[cfg(not(feature = "std"))]
+pub struct OFACScreener {
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<OFACSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
 impl OFACScreener {
-    async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
         #[cfg(feature = "std")]
         {
             let api_client = Client::builder()
@@ -544,36 +558,49 @@ impl OFACScreener {
         }
     }
     
-    async fn screen_customer(&self, customer: &CustomerData) -> Result<OFACScreeningResult, ComplianceError> {
+    pub async fn screen_customer(&self, customer: &CustomerData) -> Result<OFACScreeningResult, ComplianceError> {
         // Screen against OFAC Specially Designated Nationals (SDN) list
-        let sanctions_cache = self.sanctions_cache.read();
-        
-        let mut matches = Vec::new();
-        for sanction_record in sanctions_cache.iter() {
-            let name_match_score = self.calculate_name_match_score(
-                &customer.full_name,
-                &sanction_record.names
-            );
+        #[cfg(feature = "std")]
+        {
+            let sanctions_cache = self.sanctions_cache.read().await;
             
-            if name_match_score > 0.8 {
-                matches.push(OFACMatch {
-                    record_id: sanction_record.id.clone(),
-                    match_score: name_match_score,
-                    match_type: OFACMatchType::Name,
-                    record_details: sanction_record.clone(),
-                });
+            let mut matches = Vec::new();
+            for sanction_record in sanctions_cache.iter() {
+                let name_match_score = self.calculate_name_match_score(
+                    &customer.full_name,
+                    &sanction_record.names
+                );
+                
+                if name_match_score > 0.8 {
+                    matches.push(OFACMatch {
+                        record_id: sanction_record.id.clone(),
+                        match_score: name_match_score,
+                        match_type: OFACMatchType::Name,
+                        record_details: sanction_record.clone(),
+                    });
+                }
             }
+            
+            Ok(OFACScreeningResult {
+                screening_timestamp: self.get_current_timestamp(),
+                matches: matches.iter().map(|m| m.record_id.clone()).collect(),
+                risk_level: if matches.is_empty() { RiskLevel::Low } else { RiskLevel::High },
+                screening_status: if matches.is_empty() { ScreeningStatus::Clear } else { ScreeningStatus::Hit },
+            })
         }
         
-        Ok(OFACScreeningResult {
-            screening_timestamp: self.get_current_timestamp(),
-            matches: matches.iter().map(|m| m.record_id.clone()).collect(),
-            risk_level: if matches.is_empty() { RiskLevel::Low } else { RiskLevel::High },
-            screening_status: if matches.is_empty() { ScreeningStatus::Clear } else { ScreeningStatus::Hit },
-        })
+        #[cfg(not(feature = "std"))]
+        {
+            Ok(OFACScreeningResult {
+                screening_timestamp: self.get_current_timestamp(),
+                matches: Vec::new(),
+                risk_level: RiskLevel::Low,
+                screening_status: ScreeningStatus::Clear,
+            })
+        }
     }
     
-    async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
+    pub async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
         #[cfg(feature = "std")]
         {
             // Fetch latest OFAC SDN list from official API
@@ -592,12 +619,12 @@ impl OFACScreener {
             
             // Update cache
             {
-                let mut cache = self.sanctions_cache.write();
+                let mut cache = self.sanctions_cache.write().await;
                 *cache = sanctions_data;
             }
             
             {
-                let mut last_update = self.last_update.write();
+                let mut last_update = self.last_update.write().await;
                 *last_update = self.get_current_timestamp();
             }
             
@@ -610,7 +637,7 @@ impl OFACScreener {
         }
     }
     
-    async fn health_check(&self) -> Result<(), ComplianceError> {
+    pub async fn health_check(&self) -> Result<(), ComplianceError> {
         #[cfg(feature = "std")]
         {
             let url = format!("{}/health", self.config.base_url);
@@ -709,16 +736,23 @@ impl OFACScreener {
 // For brevity, showing structure for one more component:
 
 /// EU Sanctions Screening
+#[cfg(feature = "std")]
 pub struct EUScreener {
-    #[cfg(feature = "std")]
     api_client: Client,
     config: OfficialAPIConfig,
     sanctions_cache: Arc<RwLock<Vec<EUSanctionRecord>>>,
     last_update: Arc<RwLock<u64>>,
 }
 
+#[cfg(not(feature = "std"))]
+pub struct EUScreener {
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<EUSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
 impl EUScreener {
-    async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
         #[cfg(feature = "std")]
         {
             let api_client = Client::builder()
@@ -744,7 +778,7 @@ impl EUScreener {
         }
     }
     
-    async fn screen_customer(&self, customer: &CustomerData) -> Result<EUScreeningResult, ComplianceError> {
+    pub async fn screen_customer(&self, customer: &CustomerData) -> Result<EUScreeningResult, ComplianceError> {
         // Implementation similar to OFAC but for EU sanctions list
         Ok(EUScreeningResult {
             screening_timestamp: self.get_current_timestamp(),
@@ -754,12 +788,12 @@ impl EUScreener {
         })
     }
     
-    async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
+    pub async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
         // Fetch from EU official API
         Ok(UpdateStatus::Success)
     }
     
-    async fn health_check(&self) -> Result<(), ComplianceError> {
+    pub async fn health_check(&self) -> Result<(), ComplianceError> {
         Ok(())
     }
     
@@ -781,86 +815,409 @@ impl EUScreener {
 }
 
 // Placeholder implementations for other components
-pub struct UNScreener { /* ... */ }
-pub struct UKScreener { /* ... */ }
-pub struct PEPScreener { /* ... */ }
+#[cfg(feature = "std")]
+pub struct UNScreener {
+    api_client: Client,
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<UNSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(not(feature = "std"))]
+pub struct UNScreener {
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<UNSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(feature = "std")]
+pub struct UKScreener {
+    api_client: Client,
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<UKSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(not(feature = "std"))]
+pub struct UKScreener {
+    config: OfficialAPIConfig,
+    sanctions_cache: Arc<RwLock<Vec<UKSanctionRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(feature = "std")]
+pub struct PEPScreener {
+    api_client: Client,
+    config: OfficialAPIConfig,
+    pep_cache: Arc<RwLock<Vec<PEPRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(not(feature = "std"))]
+pub struct PEPScreener {
+    config: OfficialAPIConfig,
+    pep_cache: Arc<RwLock<Vec<PEPRecord>>>,
+    last_update: Arc<RwLock<u64>>,
+}
 
 impl PEPScreener {
-    pub async fn new(_config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+        #[cfg(feature = "std")]
+        {
+            let api_client = Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .map_err(|e| ComplianceError::APIConnectionFailed(format!("PEP: {}", e)))?;
+                
+            Ok(Self {
+                api_client,
+                config: config.clone(),
+                pep_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+        
+        #[cfg(not(feature = "std"))]
+        {
+            Ok(Self {
+                config: config.clone(),
+                pep_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+    }
+
+    pub async fn screen_customer(&self, _customer: &CustomerData) -> Result<PEPScreeningResult, ComplianceError> {
+        Ok(PEPScreeningResult::default())
+    }
+
+    pub async fn update_pep_database(&self) -> Result<UpdateStatus, ComplianceError> {
+        Ok(UpdateStatus::Success)
+    }
+
+    pub async fn health_check(&self) -> Result<(), ComplianceError> {
+        Ok(())
     }
 }
-pub struct CountryRiskAssessor { /* ... */ }
+
+#[cfg(feature = "std")]
+pub struct CountryRiskAssessor {
+    api_client: Client,
+    config: OfficialAPIConfig,
+    risk_cache: Arc<RwLock<HashMap<String, CountryRiskResult>>>,
+    last_update: Arc<RwLock<u64>>,
+}
+
+#[cfg(not(feature = "std"))]
+pub struct CountryRiskAssessor {
+    config: OfficialAPIConfig,
+    risk_cache: Arc<RwLock<HashMap<String, CountryRiskResult>>>,
+    last_update: Arc<RwLock<u64>>,
+}
 
 impl CountryRiskAssessor {
-    pub async fn new(_config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+        #[cfg(feature = "std")]
+        {
+            let api_client = Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .map_err(|e| ComplianceError::APIConnectionFailed(format!("CountryRisk: {}", e)))?;
+                
+            Ok(Self {
+                api_client,
+                config: config.clone(),
+                risk_cache: Arc::new(RwLock::new(HashMap::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+        
+        #[cfg(not(feature = "std"))]
+        {
+            Ok(Self {
+                config: config.clone(),
+                risk_cache: Arc::new(RwLock::new(HashMap::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+    }
+
+    pub async fn assess_customer(&self, _customer: &CustomerData) -> Result<CountryRiskResult, ComplianceError> {
+        Ok(CountryRiskResult::default())
+    }
+
+    pub async fn get_country_risk(&self, _country: &str) -> Result<CountryRiskResult, ComplianceError> {
+        Ok(CountryRiskResult::default())
+    }
+
+    pub async fn update_risk_ratings(&self) -> Result<UpdateStatus, ComplianceError> {
+        Ok(UpdateStatus::Success)
     }
 }
-pub struct FATCAChecker { /* ... */ }
+
+pub struct FATCAChecker {
+    config: ComplianceEngineConfig,
+}
 
 impl FATCAChecker {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
+    }
+
+    pub async fn check_customer(&self, _customer: &CustomerData) -> Result<FATCAResult, ComplianceError> {
+        Ok(FATCAResult::default())
+    }
+
+    pub async fn check_transaction(&self, _transaction: &TransactionData) -> Result<FATCAResult, ComplianceError> {
+        Ok(FATCAResult::default())
     }
 }
-pub struct CRSChecker { /* ... */ }
+
+pub struct CRSChecker {
+    config: ComplianceEngineConfig,
+}
 
 impl CRSChecker {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
+    }
+
+    pub async fn check_customer(&self, _customer: &CustomerData) -> Result<CRSResult, ComplianceError> {
+        Ok(CRSResult::default())
     }
 }
-pub struct AMLEngine { /* ... */ }
+
+pub struct AMLEngine {
+    config: ComplianceEngineConfig,
+}
 
 impl AMLEngine {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
+    }
+
+    pub async fn screen_transaction(&self, _transaction: &TransactionData) -> Result<AMLResult, ComplianceError> {
+        Ok(AMLResult::default())
+    }
+
+    pub async fn analyze_transaction_patterns(&self, _transaction: &TransactionData) -> Result<PatternAnalysisResult, ComplianceError> {
+        Ok(PatternAnalysisResult::default())
     }
 }
-pub struct KYCValidator { /* ... */ }
+
+pub struct KYCValidator {
+    config: ComplianceEngineConfig,
+}
 
 impl KYCValidator {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
     }
 }
-pub struct RegulatoryReportingEngine { /* ... */ }
+
+pub struct RegulatoryReportingEngine {
+    config: ComplianceEngineConfig,
+}
 
 impl RegulatoryReportingEngine {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
     }
-}
-pub struct ComplianceAlertSystem { /* ... */ }
 
-impl ComplianceAlertSystem {
-    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
-        Ok(Self {})
+    pub async fn log_screening_result(&self, _result: &ComplianceScreeningResult) -> Result<(), ComplianceError> {
+        Ok(())
     }
-}
 
-// Implement placeholder structs with basic functionality
-macro_rules! impl_screener_placeholder {
-    ($screener:ident, $config_field:ident, $result_type:ident) => {
-        impl $screener {
-            async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
-                Ok(Self {})
-            }
-            
-            async fn screen_customer(&self, _customer: &CustomerData) -> Result<$result_type, ComplianceError> {
-                Ok($result_type::default())
-            }
-            
-            async fn health_check(&self) -> Result<(), ComplianceError> {
-                Ok(())
-            }
+    pub async fn generate_sar_report(&self, _result: &TransactionComplianceResult) -> Result<(), ComplianceError> {
+        Ok(())
+    }
+
+    pub async fn generate_sar_report_batch(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::SuspiciousActivityReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    pub async fn generate_ctr_report(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::CurrencyTransactionReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    pub async fn generate_fatca_report(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::FATCAReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    pub async fn generate_crs_report(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::CRSReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    pub async fn generate_aml_compliance_report(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::AMLComplianceReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    pub async fn generate_risk_assessment_report(&self, _period: ReportingPeriod) -> Result<RegulatoryReport, ComplianceError> {
+        Ok(RegulatoryReport {
+            report_id: Uuid::new_v4(),
+            report_type: RegulatoryReportType::RiskAssessmentReport,
+            period: _period,
+            generated_at: self.get_current_timestamp(),
+            data: Vec::new(),
+        })
+    }
+
+    fn get_current_timestamp(&self) -> u64 {
+        #[cfg(feature = "std")]
+        {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        }
+        
+        #[cfg(not(feature = "std"))]
+        {
+            12345678900
         }
     }
 }
 
-impl_screener_placeholder!(UNScreener, un_sanctions_api, UNScreeningResult);
-impl_screener_placeholder!(UKScreener, uk_sanctions_api, UKScreeningResult);
+pub struct ComplianceAlertSystem {
+    config: ComplianceEngineConfig,
+}
+
+impl ComplianceAlertSystem {
+    pub async fn new(config: &ComplianceEngineConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {
+            config: config.clone(),
+        })
+    }
+
+    pub async fn send_high_risk_alert(&self, _result: &ComplianceScreeningResult) -> Result<(), ComplianceError> {
+        Ok(())
+    }
+
+    pub async fn send_data_update_notification(&self, _result: &DataUpdateResult) -> Result<(), ComplianceError> {
+        Ok(())
+    }
+}
+
+impl UNScreener {
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+        #[cfg(feature = "std")]
+        {
+            let api_client = Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .map_err(|e| ComplianceError::APIConnectionFailed(format!("UN: {}", e)))?;
+                
+            Ok(Self {
+                api_client,
+                config: config.clone(),
+                sanctions_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+        
+        #[cfg(not(feature = "std"))]
+        {
+            Ok(Self {
+                config: config.clone(),
+                sanctions_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+    }
+    
+    pub async fn screen_customer(&self, _customer: &CustomerData) -> Result<UNScreeningResult, ComplianceError> {
+        Ok(UNScreeningResult::default())
+    }
+    
+    pub async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
+        Ok(UpdateStatus::Success)
+    }
+    
+    pub async fn health_check(&self) -> Result<(), ComplianceError> {
+        Ok(())
+    }
+}
+
+impl UKScreener {
+    pub async fn new(config: &OfficialAPIConfig) -> Result<Self, ComplianceError> {
+        #[cfg(feature = "std")]
+        {
+            let api_client = Client::builder()
+                .timeout(Duration::from_secs(config.timeout_seconds))
+                .build()
+                .map_err(|e| ComplianceError::APIConnectionFailed(format!("UK: {}", e)))?;
+                
+            Ok(Self {
+                api_client,
+                config: config.clone(),
+                sanctions_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+        
+        #[cfg(not(feature = "std"))]
+        {
+            Ok(Self {
+                config: config.clone(),
+                sanctions_cache: Arc::new(RwLock::new(Vec::new())),
+                last_update: Arc::new(RwLock::new(0)),
+            })
+        }
+    }
+    
+    pub async fn screen_customer(&self, _customer: &CustomerData) -> Result<UKScreeningResult, ComplianceError> {
+        Ok(UKScreeningResult::default())
+    }
+    
+    pub async fn update_sanctions_list(&self) -> Result<UpdateStatus, ComplianceError> {
+        Ok(UpdateStatus::Success)
+    }
+    
+    pub async fn health_check(&self) -> Result<(), ComplianceError> {
+        Ok(())
+    }
+}
 
 // Data structures
 
@@ -1099,6 +1456,36 @@ pub struct EUSanctionRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UNSanctionRecord {
+    pub id: String,
+    pub names: Vec<String>,
+    pub resolution_number: String,
+    pub sanction_type: String,
+    pub effective_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UKSanctionRecord {
+    pub id: String,
+    pub names: Vec<String>,
+    pub regulation_reference: String,
+    pub sanction_type: String,
+    pub effective_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PEPRecord {
+    pub id: String,
+    pub full_name: String,
+    pub aliases: Vec<String>,
+    pub position: String,
+    pub country: String,
+    pub risk_level: RiskLevel,
+    pub status: PEPStatus,
+    pub last_updated: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OFACMatch {
     pub record_id: String,
     pub match_score: f64,
@@ -1153,6 +1540,9 @@ impl core::fmt::Display for ComplianceError {
         }
     }
 }
+
+#[cfg(feature = "std")]
+impl std::error::Error for ComplianceError {}
 
 // Additional placeholder types that would be fully implemented
 #[derive(Debug, Clone, Serialize, Deserialize)]

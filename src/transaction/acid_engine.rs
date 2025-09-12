@@ -370,7 +370,7 @@ impl ACIDTransactionEngine {
         
         // Store active transaction
         {
-            let mut active_txns = self.active_transactions.write();
+            let mut active_txns = self.active_transactions.write().await;
             active_txns.insert(global_txn_id, distributed_txn);
         }
         
@@ -404,7 +404,7 @@ impl ACIDTransactionEngine {
                 
                 // Remove from active transactions
                 {
-                    let mut active_txns = self.active_transactions.write();
+                    let mut active_txns = self.active_transactions.write().await;
                     active_txns.remove(&global_txn_id);
                 }
                 
@@ -436,7 +436,7 @@ impl ACIDTransactionEngine {
         
         // Remove from active transactions
         {
-            let mut active_txns = self.active_transactions.write();
+            let mut active_txns = self.active_transactions.write().await;
             active_txns.remove(&global_txn_id);
         }
         
@@ -470,7 +470,7 @@ impl ACIDTransactionEngine {
         transaction.updated_at = self.get_current_timestamp();
         
         {
-            let mut active_txns = self.active_transactions.write();
+            let mut active_txns = self.active_transactions.write().await;
             active_txns.insert(global_txn_id, transaction);
         }
         
@@ -522,7 +522,7 @@ impl ACIDTransactionEngine {
     // Helper methods
     
     async fn get_transaction(&self, global_txn_id: Uuid) -> Result<DistributedTransaction, ACIDError> {
-        let active_txns = self.active_transactions.read();
+        let active_txns = self.active_transactions.read().await;
         active_txns.get(&global_txn_id)
             .cloned()
             .ok_or(ACIDError::TransactionNotFound)
@@ -951,7 +951,7 @@ impl ConcurrencyManager {
     }
     
     async fn acquire_locks(&self, transaction: &DistributedTransaction) -> Result<(), ACIDError> {
-        let mut lock_table = self.lock_table.write();
+        let mut lock_table = self.lock_table.write().await;
         
         for operation in &transaction.operations {
             let resource_id = format!("{}:{}", operation.table_name, operation.primary_key);
@@ -981,7 +981,7 @@ impl ConcurrencyManager {
     }
     
     async fn release_locks(&self, transaction: &DistributedTransaction) -> Result<(), ACIDError> {
-        let mut lock_table = self.lock_table.write();
+        let mut lock_table = self.lock_table.write().await;
         
         // Remove all locks held by this transaction
         lock_table.retain(|_, lock| lock.transaction_id != transaction.global_txn_id);
