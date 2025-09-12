@@ -84,7 +84,8 @@ pub const BUILD_INFO: &str = concat!(
 );
 
 /// Initialize logging and monitoring
-pub fn init_telemetry() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+#[cfg(feature = "std")]
+pub fn init_telemetry() -> Result<(), CoreError> {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     
     tracing_subscriber::registry()
