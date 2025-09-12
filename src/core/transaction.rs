@@ -47,7 +47,7 @@ pub enum TransactionType {
 }
 
 /// Transaction priority for processing order
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, PartialOrd, Hash)]
 pub enum TransactionPriority {
     Low = 1,
     Normal = 2,

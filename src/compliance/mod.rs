@@ -182,7 +182,7 @@ impl ComplianceEngine {
     }
 
     async fn execute_rule(&self, transaction_id: Uuid, rule: &ComplianceRule) -> Result<ComplianceCheck, Box<dyn std::error::Error + Send + Sync>> {
-        let mut risk_score: f32 = 0.0;
+        let mut risk_score: f64 = 0.0;
         let mut status = ComplianceStatus::Approved;
         let mut details = String::new();
 
@@ -240,7 +240,7 @@ impl ComplianceEngine {
             transaction_id
         ).fetch_one(self.db.as_ref()).await?;
 
-        let mut risk_score: f32 = 0.0;
+        let mut risk_score: f64 = 0.0;
 
         // Check transaction amount thresholds
         if transaction.amount > rust_decimal::Decimal::from(10000) {
@@ -272,7 +272,7 @@ impl ComplianceEngine {
             risk_score += 0.5;
         }
 
-        Ok(risk_score.min(1.0) as f64)
+        Ok(risk_score.min(1.0))
     }
 
     async fn check_kyc_compliance(&self, transaction_id: Uuid) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
@@ -292,7 +292,7 @@ impl ComplianceEngine {
             transaction.to_account
         ).fetch_one(self.db.as_ref()).await?;
 
-        let mut risk_score: f32 = 0.0;
+        let mut risk_score: f64 = 0.0;
 
         if !from_kyc.unwrap_or(false) {
             risk_score += 0.5;
@@ -312,7 +312,7 @@ impl ComplianceEngine {
         ).fetch_one(self.db.as_ref()).await?;
 
         let watchlists = self.watchlists.read().await;
-        let mut risk_score: f32 = 0.0;
+        let mut risk_score: f64 = 0.0;
 
         // Check for sanctioned entities
         for entry in watchlists.values() {
