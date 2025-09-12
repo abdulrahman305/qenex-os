@@ -567,7 +567,7 @@ impl OFACScreener {
         
         Ok(OFACScreeningResult {
             screening_timestamp: self.get_current_timestamp(),
-            matches,
+            matches: matches.iter().map(|m| m.record_id.clone()).collect(),
             risk_level: if matches.is_empty() { RiskLevel::Low } else { RiskLevel::High },
             screening_status: if matches.is_empty() { ScreeningStatus::Clear } else { ScreeningStatus::Hit },
         })
@@ -784,13 +784,61 @@ impl EUScreener {
 pub struct UNScreener { /* ... */ }
 pub struct UKScreener { /* ... */ }
 pub struct PEPScreener { /* ... */ }
+
+impl PEPScreener {
+    pub async fn new(_config: &str) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct CountryRiskAssessor { /* ... */ }
+
+impl CountryRiskAssessor {
+    pub async fn new(_config: &str) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct FATCAChecker { /* ... */ }
+
+impl FATCAChecker {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct CRSChecker { /* ... */ }
+
+impl CRSChecker {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct AMLEngine { /* ... */ }
+
+impl AMLEngine {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct KYCValidator { /* ... */ }
+
+impl KYCValidator {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct RegulatoryReportingEngine { /* ... */ }
+
+impl RegulatoryReportingEngine {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 pub struct ComplianceAlertSystem { /* ... */ }
+
+impl ComplianceAlertSystem {
+    pub async fn new(_config: &ComplianceConfig) -> Result<Self, ComplianceError> {
+        Ok(Self {})
+    }
+}
 
 // Implement placeholder structs with basic functionality
 macro_rules! impl_screener_placeholder {

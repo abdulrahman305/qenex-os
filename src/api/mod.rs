@@ -5,7 +5,7 @@ use axum::{
     Router,
     routing::{get, post},
     extract::{State, Json, Path, Query},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
@@ -265,16 +265,16 @@ async fn risk_assessment(
 async fn get_risk_score(
     State(state): State<AppState>,
     Path(entity_id): Path<String>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.get_risk_score(&entity_id).await {
         Ok(score) => (StatusCode::OK, Json(RiskScoreResponse {
             entity_id,
             score,
             category: categorize_risk(score),
-        })),
+        })).into_response(),
         Err(_) => (StatusCode::NOT_FOUND, Json(ErrorResponse {
             error: "Entity not found".to_string(),
-        })),
+        })).into_response(),
     }
 }
 
@@ -282,15 +282,15 @@ async fn get_risk_score(
 async fn send_swift(
     State(state): State<AppState>,
     Json(req): Json<SwiftMessageRequest>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.send_swift_message(req).await {
         Ok(msg_id) => (StatusCode::OK, Json(SwiftResponse {
             message_id: msg_id,
             status: "sent".to_string(),
-        })),
+        })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse {
             error: e.to_string(),
-        })),
+        })).into_response(),
     }
 }
 
@@ -298,15 +298,15 @@ async fn send_swift(
 async fn sepa_transfer(
     State(state): State<AppState>,
     Json(req): Json<SEPATransferRequest>,
-) -> impl IntoResponse {
+) -> Response {
     match state.banking_core.initiate_sepa_transfer(req).await {
         Ok(transfer_id) => (StatusCode::OK, Json(SEPAResponse {
             transfer_id,
             status: "initiated".to_string(),
-        })),
+        })).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(ErrorResponse {
             error: e.to_string(),
-        })),
+        })).into_response(),
     }
 }
 

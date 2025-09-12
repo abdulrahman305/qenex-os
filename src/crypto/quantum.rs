@@ -654,7 +654,7 @@ impl QuantumResistantEngine {
                 created_at: SystemTime::now(),
                 expires_at: Some(SystemTime::now() + std::time::Duration::from_secs(90 * 24 * 3600)), // 90 days
                 last_used: SystemTime::now(),
-                usage_count: RwLock::new(0),
+                usage_count: 0,
                 creator_process_id: None,
                 key_purpose: purpose,
                 compliance_tags: vec!["QUANTUM-SAFE".to_string()],

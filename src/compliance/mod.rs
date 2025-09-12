@@ -272,7 +272,7 @@ impl ComplianceEngine {
             risk_score += 0.5;
         }
 
-        Ok(risk_score.min(1.0))
+        Ok(risk_score.min(1.0) as f64)
     }
 
     async fn check_kyc_compliance(&self, transaction_id: Uuid) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {

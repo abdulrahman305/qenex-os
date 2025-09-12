@@ -650,7 +650,7 @@ impl TransactionEngine {
             to_account: transaction_request.to_account.clone(),
             amount: transaction_request.amount,
             currency: transaction_request.currency.clone(),
-            priority: transaction_request.priority.unwrap_or(TransactionPriority::Normal),
+            priority: transaction_request.priority.clone().unwrap_or(TransactionPriority::Normal),
             created_at: now,
             updated_at: now,
             timeout_at: now + Duration::from_secs(self.config.transaction_timeout_seconds),
@@ -779,7 +779,7 @@ impl TransactionEngine {
         &self,
         transaction_id: Uuid,
     ) -> Result<TransactionStatus, TransactionEngineError> {
-        let active_txns = self.active_transactions.read().unwrap();
+        let active_txns = self.active_transactions.read().await;
         let transaction = active_txns.get(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         Ok(transaction.status.clone())
@@ -790,7 +790,7 @@ impl TransactionEngine {
         &self,
         transaction_id: Uuid,
     ) -> Result<TransactionDetails, TransactionEngineError> {
-        let active_txns = self.active_transactions.read().unwrap();
+        let active_txns = self.active_transactions.read().await;
         let transaction = active_txns.get(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
@@ -817,7 +817,7 @@ impl TransactionEngine {
         transaction_id: Uuid,
         reason: String,
     ) -> Result<(), TransactionEngineError> {
-        let mut active_txns = self.active_transactions.write().unwrap();
+        let mut active_txns = self.active_transactions.write().await;
         let transaction = active_txns.get_mut(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
@@ -854,17 +854,17 @@ impl TransactionEngine {
     /// Get real-time performance metrics
     pub async fn get_metrics(&self) -> TransactionEngineMetrics {
         let metrics = self.metrics.clone();
-        let active_count = self.active_transactions.read().unwrap().len();
-        let queue_depths = metrics.queue_depths.read().unwrap().clone();
+        let active_count = self.active_transactions.read().await.len();
+        let queue_depths = metrics.queue_depths.read().await.clone();
         
         TransactionEngineMetrics {
             active_transactions: active_count as u64,
             queue_depths,
-            total_processed: metrics.throughput_counters.read().unwrap()
+            total_processed: metrics.throughput_counters.read().await
                 .get("total_processed").copied().unwrap_or(0),
             success_rate: self.calculate_success_rate().await,
             average_processing_time: self.calculate_average_processing_time().await,
-            settlement_metrics: metrics.settlement_metrics.read().unwrap().clone(),
+            settlement_metrics: metrics.settlement_metrics.read().await.clone(),
         }
     }
     
@@ -924,7 +924,7 @@ impl TransactionEngine {
         transaction_id: Uuid,
         status: TransactionStatus,
     ) -> Result<(), TransactionEngineError> {
-        let mut active_txns = self.active_transactions.write().unwrap();
+        let mut active_txns = self.active_transactions.write().await;
         let transaction = active_txns.get_mut(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
@@ -1073,7 +1073,7 @@ impl TransactionEngine {
         transaction_id: Uuid,
         error: TransactionEngineError,
     ) -> Result<(), TransactionEngineError> {
-        let mut active_txns = self.active_transactions.write().unwrap();
+        let mut active_txns = self.active_transactions.write().await;
         let transaction = active_txns.get_mut(&transaction_id)
             .ok_or(TransactionEngineError::TransactionNotFound)?;
         
@@ -1448,7 +1448,7 @@ impl SettlementEngine {
     }
     
     pub async fn queue_transaction(&self, transaction_id: Uuid) -> Result<(), TransactionEngineError> {
-        let mut queue = self.settlement_queue.lock().unwrap();
+        let mut queue = self.settlement_queue.lock().await;
         queue.push_back(transaction_id);
         Ok(())
     }
@@ -1469,7 +1469,7 @@ impl TransactionLog {
     }
     
     pub async fn log_event(&self, entry: LogEntry) -> Result<(), TransactionEngineError> {
-        let mut entries = self.log_entries.write().unwrap();
+        let mut entries = self.log_entries.write().await;
         entries.push(entry);
         Ok(())
     }

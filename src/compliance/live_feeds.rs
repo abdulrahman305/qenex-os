@@ -147,7 +147,7 @@ pub struct Address {
     pub address_type: AddressType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AddressType {
     Primary,
     Secondary,
@@ -322,7 +322,7 @@ pub struct ComplianceMatch {
     pub match_details: MatchDetails,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MatchType {
     ExactMatch,
     AliasMatch,
@@ -332,7 +332,7 @@ pub enum MatchType {
     FamilyAssociateMatch,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchDetails {
     pub matched_fields: Vec<String>,
     pub similarity_score: f64,
