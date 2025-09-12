@@ -896,7 +896,7 @@ pub struct ComplianceScreeningResult {
 impl ComplianceScreeningResult {
     fn calculate_overall_risk_score(&mut self) {
         // Complex risk scoring algorithm based on all screening results
-        let mut score = 0.0;
+        let mut score: f32 = 0.0;
         
         if let Some(ref ofac_result) = self.screening_details.ofac_result {
             score += match ofac_result.risk_level {
@@ -987,7 +987,7 @@ pub enum RegulatoryReportType {
     RiskAssessmentReport,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportingPeriod {
     pub start_date: u64,
     pub end_date: u64,

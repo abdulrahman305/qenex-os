@@ -602,7 +602,7 @@ impl SphincsPlus {
 }
 
 // Data structures for post-quantum cryptography
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct BankingCryptoContext {
     pub bank_id: String,
     pub dilithium_public: DilithiumPublicKey,
@@ -637,46 +637,46 @@ pub struct PostQuantumCiphertext {
 }
 
 // Key structures with zeroization
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct DilithiumKeypair {
     pub public: DilithiumPublicKey,
     pub secret: DilithiumSecretKey,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct DilithiumPublicKey(pub Vec<u8>);
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct DilithiumSecretKey(pub Vec<u8>);
 
 #[derive(Debug, Clone)]
 pub struct DilithiumSignature(pub Vec<u8>);
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct KyberKeypair {
     pub public: KyberPublicKey,
     pub secret: KyberSecretKey,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct KyberPublicKey(pub Vec<u8>);
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct KyberSecretKey(pub Vec<u8>);
 
 #[derive(Debug, Clone)]
 pub struct KyberCiphertext(pub Vec<u8>);
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct SphincsPlusKeypair {
     pub public: SphincsPlusPublicKey,
     pub secret: SphincsPlusSecretKey,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SphincsPlusPublicKey(pub Vec<u8>);
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct SphincsPlusSecretKey(pub Vec<u8>);
 
 #[derive(Debug, Clone)]

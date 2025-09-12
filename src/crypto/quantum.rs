@@ -78,7 +78,7 @@ pub struct DilithiumSigner {
     private_keys: RwLock<HashMap<Uuid, DilithiumPrivateKey>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 pub enum DilithiumSecurityLevel {
     /// NIST Level 1 (128-bit security)
     Level1,
@@ -90,7 +90,7 @@ pub enum DilithiumSecurityLevel {
     Level5,
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct DilithiumPublicKey {
     pub key_id: Uuid,
     pub security_level: DilithiumSecurityLevel,
@@ -99,14 +99,14 @@ pub struct DilithiumPublicKey {
     pub expires_at: Option<SystemTime>,
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct DilithiumPrivateKey {
     pub key_id: Uuid,
     pub security_level: DilithiumSecurityLevel,
     pub private_key_data: Vec<u8>,
     pub public_key_hash: [u8; 32],
     pub created_at: SystemTime,
-    pub last_used: RwLock<SystemTime>,
+    pub last_used: SystemTime,
 }
 
 /// FALCON signature implementation
@@ -115,7 +115,7 @@ pub struct FalconSigner {
     key_store: RwLock<HashMap<Uuid, FalconKeyPair>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 pub enum FalconSecurityLevel {
     /// FALCON-512 (NIST Level 1)
     Falcon512,
@@ -123,7 +123,7 @@ pub enum FalconSecurityLevel {
     Falcon1024,
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct FalconKeyPair {
     pub key_id: Uuid,
     pub public_key: Vec<u8>,
@@ -139,7 +139,7 @@ pub struct SphincsPlus {
     signature_counter: Mutex<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 pub enum SphincsParameterSet {
     /// SPHINCS+-128s (small signatures)
     Sha256_128s,
@@ -151,7 +151,7 @@ pub enum SphincsParameterSet {
     Sha256_256s,
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct SphincsKeyPair {
     pub key_id: Uuid,
     pub public_key: Vec<u8>,
@@ -176,7 +176,7 @@ pub struct KyberKEM {
     key_pairs: RwLock<HashMap<Uuid, KyberKeyPair>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Zeroize, ZeroizeOnDrop)]
 pub enum KyberSecurityLevel {
     /// Kyber-512 (NIST Level 1)
     Kyber512,
@@ -186,7 +186,7 @@ pub enum KyberSecurityLevel {
     Kyber1024,
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct KyberKeyPair {
     pub key_id: Uuid,
     pub public_key: Vec<u8>,
@@ -336,7 +336,7 @@ pub enum SecurityLevel {
     Classified,   // Government-grade
 }
 
-#[derive(Debug, Clone, ZeroizeOnDrop)]
+#[derive(Debug, Clone)]
 pub struct KeyMaterial {
     pub public_key: Option<Vec<u8>>,
     pub private_key: Option<Vec<u8>>,
@@ -348,8 +348,8 @@ pub struct KeyMaterial {
 pub struct KeyMetadata {
     pub created_at: SystemTime,
     pub expires_at: Option<SystemTime>,
-    pub last_used: RwLock<SystemTime>,
-    pub usage_count: RwLock<u64>,
+    pub last_used: SystemTime,
+    pub usage_count: u64,
     pub creator_process_id: Option<crate::kernel::ProcessId>,
     pub key_purpose: KeyPurpose,
     pub compliance_tags: Vec<String>,

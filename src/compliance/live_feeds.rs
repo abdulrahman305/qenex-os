@@ -875,7 +875,9 @@ pub struct ScreeningMetrics;
 pub struct RuleEvaluator;
 pub struct RuleVersionControl;
 pub struct OFACUpdate;
+#[derive(Clone)]
 pub struct EUUpdate;
+#[derive(Clone)]
 pub struct UNUpdate;
 
 impl OFACFeed {

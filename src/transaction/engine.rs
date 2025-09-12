@@ -185,7 +185,7 @@ pub enum TransactionStatus {
 }
 
 /// Transaction priority levels
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum TransactionPriority {
     /// Critical system transactions
     Critical = 0,
@@ -198,7 +198,7 @@ pub enum TransactionPriority {
 }
 
 /// Database transaction context for ACID compliance
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SqlTransactionContext {
     pub transaction_id: Uuid,
     pub isolation_level: IsolationLevel,
