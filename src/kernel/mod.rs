@@ -174,6 +174,7 @@ pub struct VirtualAddressSpace {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug, Clone)]
     pub struct PageFlags: u32 {
         const READ = 1 << 0;
         const WRITE = 1 << 1;

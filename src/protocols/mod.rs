@@ -661,175 +661,181 @@ impl BankingProtocolEngine {
 
     // Database operations
     async fn store_swift_message(&self, message: &SwiftMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO swift_messages 
              (id, message_type, sender_bic, receiver_bic, transaction_reference, amount, currency, 
               value_date, ordering_customer, beneficiary, remittance_info, charges, created_at, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
-            message.id,
-            serde_json::to_string(&message.message_type)?,
-            message.sender_bic,
-            message.receiver_bic,
-            message.transaction_reference,
-            message.amount,
-            message.currency,
-            message.value_date,
-            message.ordering_customer,
-            message.beneficiary,
-            message.remittance_info,
-            serde_json::to_string(&message.charges)?,
-            message.created_at,
-            serde_json::to_string(&message.status)?
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
+        )
+        .bind(message.id)
+        .bind(serde_json::to_string(&message.message_type)?)
+        .bind(&message.sender_bic)
+        .bind(&message.receiver_bic)
+        .bind(&message.transaction_reference)
+        .bind(message.amount)
+        .bind(&message.currency)
+        .bind(message.value_date)
+        .bind(&message.ordering_customer)
+        .bind(&message.beneficiary)
+        .bind(&message.remittance_info)
+        .bind(serde_json::to_string(&message.charges)?)
+        .bind(message.created_at)
+        .bind(serde_json::to_string(&message.status)?)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn store_iso20022_message(&self, message: &ISO20022Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO iso20022_messages 
              (id, message_type, message_id, creation_date_time, initiating_party, 
               payment_info, credit_transfer_info, status, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-            message.id,
-            serde_json::to_string(&message.message_type)?,
-            message.message_id,
-            message.creation_date_time,
-            message.initiating_party,
-            serde_json::to_string(&message.payment_info)?,
-            serde_json::to_string(&message.credit_transfer_info)?,
-            serde_json::to_string(&message.status)?,
-            message.created_at
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(message.id)
+        .bind(serde_json::to_string(&message.message_type)?)
+        .bind(&message.message_id)
+        .bind(message.creation_date_time)
+        .bind(&message.initiating_party)
+        .bind(serde_json::to_string(&message.payment_info)?)
+        .bind(serde_json::to_string(&message.credit_transfer_info)?)
+        .bind(serde_json::to_string(&message.status)?)
+        .bind(message.created_at)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn store_sepa_payment(&self, payment: &SEPAPayment) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO sepa_payments 
              (id, sepa_type, message_id, payment_info_id, debtor_iban, debtor_name, 
               creditor_iban, creditor_name, amount, currency, end_to_end_id, 
               remittance_info, execution_date, batch_booking, created_at, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)",
-            payment.id,
-            serde_json::to_string(&payment.sepa_type)?,
-            payment.message_id,
-            payment.payment_info_id,
-            payment.debtor_iban,
-            payment.debtor_name,
-            payment.creditor_iban,
-            payment.creditor_name,
-            payment.amount,
-            payment.currency,
-            payment.end_to_end_id,
-            payment.remittance_info,
-            payment.execution_date,
-            payment.batch_booking,
-            payment.created_at,
-            serde_json::to_string(&payment.status)?
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)"
+        )
+        .bind(payment.id)
+        .bind(serde_json::to_string(&payment.sepa_type)?)
+        .bind(&payment.message_id)
+        .bind(&payment.payment_info_id)
+        .bind(&payment.debtor_iban)
+        .bind(&payment.debtor_name)
+        .bind(&payment.creditor_iban)
+        .bind(&payment.creditor_name)
+        .bind(payment.amount)
+        .bind(&payment.currency)
+        .bind(&payment.end_to_end_id)
+        .bind(&payment.remittance_info)
+        .bind(payment.execution_date)
+        .bind(payment.batch_booking)
+        .bind(payment.created_at)
+        .bind(serde_json::to_string(&payment.status)?)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn get_swift_message(&self, id: Uuid) -> Result<SwiftMessage, Box<dyn std::error::Error + Send + Sync>> {
-        let row = sqlx::query!(
-            "SELECT * FROM swift_messages WHERE id = $1",
-            id
-        ).fetch_one(self.db.as_ref()).await?;
+        let row = sqlx::query("SELECT * FROM swift_messages WHERE id = $1")
+            .bind(id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         Ok(SwiftMessage {
-            id: row.id,
-            message_type: serde_json::from_str(&row.message_type)?,
-            sender_bic: row.sender_bic,
-            receiver_bic: row.receiver_bic,
-            transaction_reference: row.transaction_reference,
-            amount: row.amount,
-            currency: row.currency,
-            value_date: row.value_date,
-            ordering_customer: row.ordering_customer,
-            beneficiary: row.beneficiary,
-            remittance_info: row.remittance_info,
-            charges: serde_json::from_str(&row.charges)?,
-            created_at: row.created_at,
-            sent_at: row.sent_at,
-            status: serde_json::from_str(&row.status)?,
+            id: row.get::<uuid::Uuid, _>("id"),
+            message_type: serde_json::from_str(&row.get::<String, _>("message_type"))?,
+            sender_bic: row.get::<String, _>("sender_bic"),
+            receiver_bic: row.get::<String, _>("receiver_bic"),
+            transaction_reference: row.get::<String, _>("transaction_reference"),
+            amount: row.get::<rust_decimal::Decimal, _>("amount"),
+            currency: row.get::<String, _>("currency"),
+            value_date: row.get::<chrono::DateTime<Utc>, _>("value_date"),
+            ordering_customer: row.get::<String, _>("ordering_customer"),
+            beneficiary: row.get::<String, _>("beneficiary"),
+            remittance_info: row.get::<Option<String>, _>("remittance_info"),
+            charges: serde_json::from_str(&row.get::<String, _>("charges"))?,
+            created_at: row.get::<chrono::DateTime<Utc>, _>("created_at"),
+            sent_at: row.get::<Option<chrono::DateTime<Utc>>, _>("sent_at"),
+            status: serde_json::from_str(&row.get::<String, _>("status"))?,
         })
     }
 
     async fn get_iso20022_message(&self, id: Uuid) -> Result<ISO20022Message, Box<dyn std::error::Error + Send + Sync>> {
-        let row = sqlx::query!(
-            "SELECT * FROM iso20022_messages WHERE id = $1",
-            id
-        ).fetch_one(self.db.as_ref()).await?;
+        let row = sqlx::query("SELECT * FROM iso20022_messages WHERE id = $1")
+            .bind(id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         Ok(ISO20022Message {
-            id: row.id,
-            message_type: serde_json::from_str(&row.message_type)?,
-            message_id: row.message_id,
-            creation_date_time: row.creation_date_time,
-            initiating_party: row.initiating_party,
-            payment_info: serde_json::from_str(&row.payment_info)?,
-            credit_transfer_info: serde_json::from_str(&row.credit_transfer_info)?,
-            status: serde_json::from_str(&row.status)?,
-            created_at: row.created_at,
+            id: row.get::<uuid::Uuid, _>("id"),
+            message_type: serde_json::from_str(&row.get::<String, _>("message_type"))?,
+            message_id: row.get::<String, _>("message_id"),
+            creation_date_time: row.get::<chrono::DateTime<Utc>, _>("creation_date_time"),
+            initiating_party: row.get::<String, _>("initiating_party"),
+            payment_info: serde_json::from_str(&row.get::<String, _>("payment_info"))?,
+            credit_transfer_info: serde_json::from_str(&row.get::<String, _>("credit_transfer_info"))?,
+            status: serde_json::from_str(&row.get::<String, _>("status"))?,
+            created_at: row.get::<chrono::DateTime<Utc>, _>("created_at"),
         })
     }
 
     async fn get_sepa_payment(&self, id: Uuid) -> Result<SEPAPayment, Box<dyn std::error::Error + Send + Sync>> {
-        let row = sqlx::query!(
-            "SELECT * FROM sepa_payments WHERE id = $1",
-            id
-        ).fetch_one(self.db.as_ref()).await?;
+        let row = sqlx::query("SELECT * FROM sepa_payments WHERE id = $1")
+            .bind(id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         Ok(SEPAPayment {
-            id: row.id,
-            sepa_type: serde_json::from_str(&row.sepa_type)?,
-            message_id: row.message_id,
-            payment_info_id: row.payment_info_id,
-            debtor_iban: row.debtor_iban,
-            debtor_name: row.debtor_name,
-            creditor_iban: row.creditor_iban,
-            creditor_name: row.creditor_name,
-            amount: row.amount,
-            currency: row.currency,
-            end_to_end_id: row.end_to_end_id,
-            remittance_info: row.remittance_info,
-            execution_date: row.execution_date,
-            batch_booking: row.batch_booking,
-            created_at: row.created_at,
-            status: serde_json::from_str(&row.status)?,
+            id: row.get::<uuid::Uuid, _>("id"),
+            sepa_type: serde_json::from_str(&row.get::<String, _>("sepa_type"))?,
+            message_id: row.get::<String, _>("message_id"),
+            payment_info_id: row.get::<String, _>("payment_info_id"),
+            debtor_iban: row.get::<String, _>("debtor_iban"),
+            debtor_name: row.get::<String, _>("debtor_name"),
+            creditor_iban: row.get::<String, _>("creditor_iban"),
+            creditor_name: row.get::<String, _>("creditor_name"),
+            amount: row.get::<rust_decimal::Decimal, _>("amount"),
+            currency: row.get::<String, _>("currency"),
+            end_to_end_id: row.get::<String, _>("end_to_end_id"),
+            remittance_info: row.get::<Option<String>, _>("remittance_info"),
+            execution_date: row.get::<chrono::DateTime<Utc>, _>("execution_date"),
+            batch_booking: row.get::<bool, _>("batch_booking"),
+            created_at: row.get::<chrono::DateTime<Utc>, _>("created_at"),
+            status: serde_json::from_str(&row.get::<String, _>("status"))?,
         })
     }
 
     async fn update_swift_message(&self, message: &SwiftMessage) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
-            "UPDATE swift_messages SET status = $1, sent_at = $2 WHERE id = $3",
-            serde_json::to_string(&message.status)?,
-            message.sent_at,
-            message.id
-        ).execute(self.db.as_ref()).await?;
+        sqlx::query("UPDATE swift_messages SET status = $1, sent_at = $2 WHERE id = $3")
+            .bind(serde_json::to_string(&message.status)?)
+            .bind(message.sent_at)
+            .bind(message.id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }
 
     async fn update_iso20022_message(&self, message: &ISO20022Message) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
-            "UPDATE iso20022_messages SET status = $1 WHERE id = $2",
-            serde_json::to_string(&message.status)?,
-            message.id
-        ).execute(self.db.as_ref()).await?;
+        sqlx::query("UPDATE iso20022_messages SET status = $1 WHERE id = $2")
+            .bind(serde_json::to_string(&message.status)?)
+            .bind(message.id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }
 
     async fn update_sepa_payment(&self, payment: &SEPAPayment) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
-            "UPDATE sepa_payments SET status = $1 WHERE id = $2",
-            serde_json::to_string(&payment.status)?,
-            payment.id
-        ).execute(self.db.as_ref()).await?;
+        sqlx::query("UPDATE sepa_payments SET status = $1 WHERE id = $2")
+            .bind(serde_json::to_string(&payment.status)?)
+            .bind(payment.id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }

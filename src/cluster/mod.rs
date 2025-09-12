@@ -602,44 +602,48 @@ impl ClusterManager {
     async fn initialize_consensus(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> { Ok(()) }
 
     async fn store_node(&self, node: &ClusterNode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO cluster_nodes 
              (id, name, address, role, status, health_score, cpu_usage, memory_usage, 
               disk_usage, network_latency, last_heartbeat, joined_at, version, capabilities)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
-            node.id,
-            node.name,
-            node.address.to_string(),
-            serde_json::to_string(&node.role)?,
-            serde_json::to_string(&node.status)?,
-            node.health_score,
-            node.cpu_usage,
-            node.memory_usage,
-            node.disk_usage,
-            node.network_latency as i64,
-            node.last_heartbeat,
-            node.joined_at,
-            node.version,
-            serde_json::to_string(&node.capabilities)?
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
+        )
+        .bind(node.id)
+        .bind(&node.name)
+        .bind(node.address.to_string())
+        .bind(serde_json::to_string(&node.role)?)
+        .bind(serde_json::to_string(&node.status)?)
+        .bind(node.health_score)
+        .bind(node.cpu_usage)
+        .bind(node.memory_usage)
+        .bind(node.disk_usage)
+        .bind(node.network_latency as i64)
+        .bind(node.last_heartbeat)
+        .bind(node.joined_at)
+        .bind(&node.version)
+        .bind(serde_json::to_string(&node.capabilities)?)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn store_load_balancer(&self, lb: &LoadBalancer) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO load_balancers 
              (id, name, algorithm, backend_nodes, health_checks, ssl_config, rate_limiting, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            lb.id,
-            lb.name,
-            serde_json::to_string(&lb.algorithm)?,
-            serde_json::to_string(&lb.backend_nodes)?,
-            serde_json::to_string(&lb.health_checks)?,
-            serde_json::to_string(&lb.ssl_config)?,
-            serde_json::to_string(&lb.rate_limiting)?,
-            lb.created_at
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+        )
+        .bind(lb.id)
+        .bind(&lb.name)
+        .bind(serde_json::to_string(&lb.algorithm)?)
+        .bind(serde_json::to_string(&lb.backend_nodes)?)
+        .bind(serde_json::to_string(&lb.health_checks)?)
+        .bind(serde_json::to_string(&lb.ssl_config)?)
+        .bind(serde_json::to_string(&lb.rate_limiting)?)
+        .bind(lb.created_at)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }

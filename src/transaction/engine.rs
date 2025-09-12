@@ -860,14 +860,22 @@ impl TransactionEngine {
             guard.iter().map(|(k, v)| (k.clone(), v.load(Ordering::Relaxed))).collect()
         };
         
+        let total_processed = {
+            let counters = metrics.throughput_counters.read().await;
+            counters.get("total_processed").map(|v| v.load(Ordering::Relaxed)).unwrap_or(0)
+        };
+        let settlement_metrics = {
+            let settlement = metrics.settlement_metrics.read().await;
+            settlement.clone()
+        };
+        
         TransactionEngineMetrics {
             active_transactions: active_count as u64,
             queue_depths,
-            total_processed: metrics.throughput_counters.read().await
-                .get("total_processed").map(|v| v.load(Ordering::Relaxed)).unwrap_or(0),
+            total_processed,
             success_rate: self.calculate_success_rate().await,
             average_processing_time: self.calculate_average_processing_time().await,
-            settlement_metrics: metrics.settlement_metrics.read().await.clone(),
+            settlement_metrics,
         }
     }
     

@@ -495,29 +495,31 @@ impl AIEngine {
     }
 
     async fn store_prediction(&self, prediction: &Prediction) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO ai_predictions 
              (id, model_id, input_data, prediction, confidence, created_at, feedback_received)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            prediction.id,
-            prediction.model_id,
-            prediction.input_data,
-            prediction.prediction,
-            prediction.confidence,
-            prediction.created_at,
-            prediction.feedback_received
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        )
+        .bind(prediction.id)
+        .bind(prediction.model_id)
+        .bind(&prediction.input_data)
+        .bind(&prediction.prediction)
+        .bind(prediction.confidence)
+        .bind(prediction.created_at)
+        .bind(prediction.feedback_received)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn update_model_after_training(&self, session: &TrainingSession) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
-            "UPDATE ai_models SET accuracy = $1, last_trained = $2 WHERE id = $3",
-            session.validation_accuracy,
-            Utc::now(),
-            session.model_id
-        ).execute(self.db.as_ref()).await?;
+        sqlx::query("UPDATE ai_models SET accuracy = $1, last_trained = $2 WHERE id = $3")
+            .bind(session.validation_accuracy)
+            .bind(Utc::now())
+            .bind(session.model_id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }

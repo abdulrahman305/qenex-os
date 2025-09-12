@@ -889,8 +889,8 @@ impl WriteAheadLogManager {
         // Force all pending WAL entries to stable storage
         #[cfg(feature = "std")]
         {
-            if let Ok(mut guard) = self.log_file.lock().await {
-                if let Some(ref mut file) = guard.as_mut() {
+            let mut guard = self.log_file.lock().await;
+            if let Some(ref mut file) = guard.as_mut() {
                 use std::io::Write;
                     file.flush().map_err(|_| ACIDError::WALError)?;
                     file.sync_all().map_err(|_| ACIDError::WALError)?;
@@ -906,8 +906,8 @@ impl WriteAheadLogManager {
         {
             use std::io::Write;
             
-            if let Ok(mut guard) = self.log_file.lock().await {
-                if let Some(ref mut file) = guard.as_mut() {
+            let mut guard = self.log_file.lock().await;
+            if let Some(ref mut file) = guard.as_mut() {
                     let serialized = bincode::serialize(entry)
                         .map_err(|_| ACIDError::SerializationError)?;
                     file.write_all(&serialized).map_err(|_| ACIDError::WALError)?;

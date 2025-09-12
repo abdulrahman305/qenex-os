@@ -34,7 +34,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     tracing::debug!("Creating core tables...");
     
     // Accounts table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS accounts (
             id VARCHAR(255) PRIMARY KEY,
@@ -56,7 +56,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create accounts table: {}", e)))?;
     
     // Account balances table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS account_balances (
             account_id VARCHAR(255) NOT NULL,
@@ -74,7 +74,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create account_balances table: {}", e)))?;
     
     // Transactions table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS transactions (
             id UUID PRIMARY KEY,
@@ -106,7 +106,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create transactions table: {}", e)))?;
     
     // Balance changes table for audit trail
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS balance_changes (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -125,7 +125,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create balance_changes table: {}", e)))?;
     
     // Audit logs table for compliance
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS audit_logs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -148,7 +148,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create audit_logs table: {}", e)))?;
     
     // Compliance reports table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS compliance_reports (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -170,7 +170,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create compliance_reports table: {}", e)))?;
     
     // KYC/AML data table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS kyc_records (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -193,7 +193,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create kyc_records table: {}", e)))?;
     
     // Transaction limits table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS transaction_limits (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -214,7 +214,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create transaction_limits table: {}", e)))?;
     
     // Exchange rates table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS exchange_rates (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -232,7 +232,7 @@ async fn create_core_tables(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create exchange_rates table: {}", e)))?;
     
     // System configuration table
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE TABLE IF NOT EXISTS system_config (
             key VARCHAR(100) PRIMARY KEY,
@@ -486,7 +486,7 @@ async fn create_views(pool: &PgPool) -> Result<()> {
     tracing::debug!("Creating database views...");
     
     // Account summary view
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE VIEW account_summary AS
         SELECT 
@@ -512,7 +512,7 @@ async fn create_views(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create account_summary view: {}", e)))?;
     
     // Transaction analytics view
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE VIEW transaction_analytics AS
         SELECT 
@@ -539,7 +539,7 @@ async fn create_views(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create transaction_analytics view: {}", e)))?;
     
     // Compliance dashboard view
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE VIEW compliance_dashboard AS
         SELECT 
@@ -568,7 +568,7 @@ async fn create_functions_and_triggers(pool: &PgPool) -> Result<()> {
     tracing::debug!("Creating database functions and triggers...");
     
     // Function to update the updated_at timestamp
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE FUNCTION update_updated_at_column()
         RETURNS TRIGGER AS $$
@@ -611,7 +611,7 @@ async fn create_functions_and_triggers(pool: &PgPool) -> Result<()> {
     }
     
     // Function to validate transaction balance
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE FUNCTION validate_transaction_balance()
         RETURNS TRIGGER AS $$
@@ -642,7 +642,7 @@ async fn create_functions_and_triggers(pool: &PgPool) -> Result<()> {
     .map_err(|e| CoreError::StorageError(format!("Failed to create balance validation function: {}", e)))?;
     
     // Trigger for transaction balance validation
-    sqlx::query!(
+    sqlx::query(
         r#"
         CREATE OR REPLACE TRIGGER validate_transaction_balance_trigger
             BEFORE INSERT ON transactions
@@ -675,16 +675,16 @@ pub async fn initialize_system_config(pool: &PgPool) -> Result<()> {
     ];
     
     for (key, value, description) in configs {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO system_config (key, value, description, updated_by)
             VALUES ($1, $2, $3, 'migration')
             ON CONFLICT (key) DO NOTHING
-            "#,
-            key,
-            value,
-            description
+            "#
         )
+        .bind(key)
+        .bind(value)
+        .bind(description)
         .execute(pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to insert system config {}: {}", key, e)))?;

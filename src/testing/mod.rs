@@ -488,7 +488,7 @@ impl TestingFramework {
 
     async fn test_database_connection(&self) -> Result<TestResult, Box<dyn std::error::Error + Send + Sync>> {
         // Test actual database connection
-        let connection_test = sqlx::query!("SELECT 1 as test_value")
+        let connection_test = sqlx::query("SELECT 1 as test_value")
             .fetch_one(self.db.as_ref())
             .await;
 
@@ -679,37 +679,41 @@ impl TestingFramework {
 
     // Database operations
     async fn store_test_suite(&self, suite: &TestSuite) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO test_suites 
              (id, name, description, test_type, tests, created_at, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            suite.id,
-            suite.name,
-            suite.description,
-            serde_json::to_string(&suite.test_type)?,
-            serde_json::to_string(&suite.tests)?,
-            suite.created_at,
-            serde_json::to_string(&suite.status)?
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        )
+        .bind(suite.id)
+        .bind(&suite.name)
+        .bind(&suite.description)
+        .bind(serde_json::to_string(&suite.test_type)?)
+        .bind(serde_json::to_string(&suite.tests)?)
+        .bind(suite.created_at)
+        .bind(serde_json::to_string(&suite.status)?)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
 
     async fn store_test_execution(&self, execution: &TestExecution) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO test_executions 
              (id, suite_id, test_case_id, started_at, completed_at, status, result, error_message, metrics)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-            execution.id,
-            execution.suite_id,
-            execution.test_case_id,
-            execution.started_at,
-            execution.completed_at,
-            serde_json::to_string(&execution.status)?,
-            serde_json::to_string(&execution.result)?,
-            execution.error_message,
-            serde_json::to_string(&execution.metrics)?
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(execution.id)
+        .bind(execution.suite_id)
+        .bind(execution.test_case_id)
+        .bind(execution.started_at)
+        .bind(execution.completed_at)
+        .bind(serde_json::to_string(&execution.status)?)
+        .bind(serde_json::to_string(&execution.result)?)
+        .bind(&execution.error_message)
+        .bind(serde_json::to_string(&execution.metrics)?)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
@@ -720,11 +724,11 @@ impl TestingFramework {
     }
 
     async fn update_suite_last_run(&self, suite_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
-            "UPDATE test_suites SET last_run = $1 WHERE id = $2",
-            Utc::now(),
-            suite_id
-        ).execute(self.db.as_ref()).await?;
+        sqlx::query("UPDATE test_suites SET last_run = $1 WHERE id = $2")
+            .bind(Utc::now())
+            .bind(suite_id)
+            .execute(self.db.as_ref())
+            .await?;
 
         Ok(())
     }

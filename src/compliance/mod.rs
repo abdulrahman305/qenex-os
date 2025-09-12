@@ -22,6 +22,13 @@ pub use real_time_compliance::{
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreeningRequest {
+    pub entity_name: String,
+    pub entity_type: EntityType,
+    pub transaction_id: Option<Uuid>,
+}
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use tokio::sync::RwLock;
@@ -229,40 +236,46 @@ impl ComplianceEngine {
 
     async fn check_aml_risk(&self, transaction_id: Uuid) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
         // Get transaction details
-        let transaction = sqlx::query!(
-            "SELECT from_account, to_account, amount, currency FROM transactions WHERE id = $1",
-            transaction_id
-        ).fetch_one(self.db.as_ref()).await?;
+        let transaction = sqlx::query("SELECT from_account, to_account, amount, currency FROM transactions WHERE id = $1")
+            .bind(transaction_id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         let mut risk_score: f64 = 0.0;
 
         // Check transaction amount thresholds
-        if transaction.amount > rust_decimal::Decimal::from(10000) {
+        let amount = transaction.get::<rust_decimal::Decimal, _>("amount");
+        if amount > rust_decimal::Decimal::from(10000) {
             risk_score += 0.3;
         }
 
         // Check velocity (multiple transactions in short time)
-        let recent_count = sqlx::query_scalar!(
+        let from_account = transaction.get::<String, _>("from_account");
+        let recent_count = sqlx::query_scalar(
             "SELECT COUNT(*) FROM transactions 
              WHERE (from_account = $1 OR to_account = $1) 
-             AND created_at > NOW() - INTERVAL '1 hour'",
-            transaction.from_account
-        ).fetch_one(self.db.as_ref()).await?;
+             AND created_at > NOW() - INTERVAL '1 hour'"
+        )
+        .bind(&from_account)
+        .fetch_one(self.db.as_ref())
+        .await?
+        .get::<i64, _>(0);
 
-        if recent_count.unwrap_or(0) > 10 {
+        if recent_count > 10 {
             risk_score += 0.4;
         }
 
         // Check watchlist
         let watchlists = self.watchlists.read().await;
-        if watchlists.contains_key(&transaction.from_account) || 
-           watchlists.contains_key(&transaction.to_account) {
+        let to_account = transaction.get::<String, _>("to_account");
+        if watchlists.contains_key(&from_account) || 
+           watchlists.contains_key(&to_account) {
             risk_score += 0.6;
         }
 
         // Structuring detection (amounts just below reporting thresholds)
-        if transaction.amount > rust_decimal::Decimal::from(9500) && 
-           transaction.amount < rust_decimal::Decimal::from(10000) {
+        if amount > rust_decimal::Decimal::from(9500) && 
+           amount < rust_decimal::Decimal::from(10000) {
             risk_score += 0.5;
         }
 
@@ -270,29 +283,33 @@ impl ComplianceEngine {
     }
 
     async fn check_kyc_compliance(&self, transaction_id: Uuid) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
-        let transaction = sqlx::query!(
-            "SELECT from_account, to_account FROM transactions WHERE id = $1",
-            transaction_id
-        ).fetch_one(self.db.as_ref()).await?;
+        let transaction = sqlx::query("SELECT from_account, to_account FROM transactions WHERE id = $1")
+            .bind(transaction_id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         // Check if accounts have completed KYC
-        let from_kyc = sqlx::query_scalar!(
-            "SELECT kyc_verified FROM accounts WHERE id = $1",
-            transaction.from_account
-        ).fetch_one(self.db.as_ref()).await?;
+        let from_account = transaction.get::<String, _>("from_account");
+        let from_kyc = sqlx::query_scalar("SELECT kyc_verified FROM accounts WHERE id = $1")
+            .bind(&from_account)
+            .fetch_one(self.db.as_ref())
+            .await?
+            .get::<bool, _>(0);
 
-        let to_kyc = sqlx::query_scalar!(
-            "SELECT kyc_verified FROM accounts WHERE id = $1", 
-            transaction.to_account
-        ).fetch_one(self.db.as_ref()).await?;
+        let to_account = transaction.get::<String, _>("to_account");
+        let to_kyc = sqlx::query_scalar("SELECT kyc_verified FROM accounts WHERE id = $1")
+            .bind(&to_account)
+            .fetch_one(self.db.as_ref())
+            .await?
+            .get::<bool, _>(0);
 
         let mut risk_score: f64 = 0.0;
 
-        if !from_kyc.unwrap_or(false) {
+        if !from_kyc {
             risk_score += 0.5;
         }
 
-        if !to_kyc.unwrap_or(false) {
+        if !to_kyc {
             risk_score += 0.5;
         }
 
@@ -300,20 +317,22 @@ impl ComplianceEngine {
     }
 
     async fn check_sanctions(&self, transaction_id: Uuid) -> Result<f64, Box<dyn std::error::Error + Send + Sync>> {
-        let transaction = sqlx::query!(
-            "SELECT from_account, to_account FROM transactions WHERE id = $1",
-            transaction_id
-        ).fetch_one(self.db.as_ref()).await?;
+        let transaction = sqlx::query("SELECT from_account, to_account FROM transactions WHERE id = $1")
+            .bind(transaction_id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         let watchlists = self.watchlists.read().await;
         let mut risk_score: f64 = 0.0;
 
         // Check for sanctioned entities
+        let from_account = transaction.get::<String, _>("from_account");
+        let to_account = transaction.get::<String, _>("to_account");
         for entry in watchlists.values() {
             if entry.source.contains("OFAC") || entry.source.contains("EU_SANCTIONS") {
                 if entry.names.iter().any(|name| 
-                    transaction.from_account.contains(name) || 
-                    transaction.to_account.contains(name)) {
+                    from_account.contains(name) || 
+                    to_account.contains(name)) {
                     match entry.risk_level {
                         RiskLevel::High => risk_score = 1.0, // Map High to Critical behavior
                         RiskLevel::Medium => risk_score = 0.6,
@@ -328,26 +347,26 @@ impl ComplianceEngine {
     }
 
     pub async fn generate_sar_report(&self, transaction_id: Uuid, reason: String) -> Result<RegulatoryReport, Box<dyn std::error::Error + Send + Sync>> {
-        let transaction = sqlx::query!(
-            "SELECT * FROM transactions WHERE id = $1",
-            transaction_id
-        ).fetch_one(self.db.as_ref()).await?;
+        let transaction = sqlx::query("SELECT * FROM transactions WHERE id = $1")
+            .bind(transaction_id)
+            .fetch_one(self.db.as_ref())
+            .await?;
 
         let report_data = serde_json::json!({
             "transaction_id": transaction_id,
-            "from_account": transaction.from_account,
-            "to_account": transaction.to_account,
-            "amount": transaction.amount,
-            "currency": transaction.currency,
+            "from_account": transaction.get::<String, _>("from_account"),
+            "to_account": transaction.get::<String, _>("to_account"),
+            "amount": transaction.get::<rust_decimal::Decimal, _>("amount"),
+            "currency": transaction.get::<String, _>("currency"),
             "reason": reason,
-            "transaction_date": transaction.created_at,
+            "transaction_date": transaction.get::<chrono::DateTime<Utc>, _>("created_at"),
             "report_date": Utc::now()
         });
 
         let report = RegulatoryReport {
             id: Uuid::new_v4(),
             report_type: ReportType::SAR,
-            period_start: transaction.created_at,
+            period_start: transaction.get::<chrono::DateTime<Utc>, _>("created_at"),
             period_end: Utc::now(),
             data: report_data,
             status: ReportStatus::Draft,
@@ -356,39 +375,43 @@ impl ComplianceEngine {
         };
 
         // Store report
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO regulatory_reports (id, report_type, period_start, period_end, data, status, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)",
-            report.id,
-            serde_json::to_string(&report.report_type)?,
-            report.period_start,
-            report.period_end,
-            report.data,
-            serde_json::to_string(&report.status)?,
-            report.created_at
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        )
+        .bind(report.id)
+        .bind(serde_json::to_string(&report.report_type)?)
+        .bind(report.period_start)
+        .bind(report.period_end)
+        .bind(&report.data)
+        .bind(serde_json::to_string(&report.status)?)
+        .bind(report.created_at)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(report)
     }
 
     async fn load_rules(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let rules_data = sqlx::query!(
+        let rules_data = sqlx::query(
             "SELECT id, name, description, rule_type, parameters, active, created_at, updated_at 
              FROM compliance_rules"
-        ).fetch_all(self.db.as_ref()).await?;
+        )
+        .fetch_all(self.db.as_ref())
+        .await?;
 
         let mut rules = self.rules.write().await;
         
         for row in rules_data {
             let rule = ComplianceRule {
-                id: row.id,
-                name: row.name,
-                description: row.description,
-                rule_type: serde_json::from_str(&row.rule_type)?,
-                parameters: serde_json::from_str(&row.parameters)?,
-                active: row.active,
-                created_at: row.created_at,
-                updated_at: row.updated_at,
+                id: row.get::<uuid::Uuid, _>("id"),
+                name: row.get::<String, _>("name"),
+                description: row.get::<String, _>("description"),
+                rule_type: serde_json::from_str(&row.get::<String, _>("rule_type"))?,
+                parameters: serde_json::from_str(&row.get::<String, _>("parameters"))?,
+                active: row.get::<bool, _>("active"),
+                created_at: row.get::<chrono::DateTime<Utc>, _>("created_at"),
+                updated_at: row.get::<chrono::DateTime<Utc>, _>("updated_at"),
             };
             rules.insert(rule.id, rule);
         }
@@ -397,22 +420,24 @@ impl ComplianceEngine {
     }
 
     async fn load_watchlists(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let watchlist_data = sqlx::query!(
+        let watchlist_data = sqlx::query(
             "SELECT id, entity_type, names, aliases, risk_level, source, added_at 
              FROM watchlist_entries"
-        ).fetch_all(self.db.as_ref()).await?;
+        )
+        .fetch_all(self.db.as_ref())
+        .await?;
 
         let mut watchlists = self.watchlists.write().await;
         
         for row in watchlist_data {
             let entry = WatchlistEntry {
-                id: row.id,
-                entity_type: serde_json::from_str(&row.entity_type)?,
-                names: serde_json::from_str(&row.names)?,
-                aliases: serde_json::from_str(&row.aliases)?,
-                risk_level: serde_json::from_str(&row.risk_level)?,
-                source: row.source,
-                added_at: row.added_at,
+                id: row.get::<String, _>("id"),
+                entity_type: serde_json::from_str(&row.get::<String, _>("entity_type"))?,
+                names: serde_json::from_str(&row.get::<String, _>("names"))?,
+                aliases: serde_json::from_str(&row.get::<String, _>("aliases"))?,
+                risk_level: serde_json::from_str(&row.get::<String, _>("risk_level"))?,
+                source: row.get::<String, _>("source"),
+                added_at: row.get::<chrono::DateTime<Utc>, _>("added_at"),
             };
             watchlists.insert(entry.id.clone(), entry);
         }
@@ -421,19 +446,21 @@ impl ComplianceEngine {
     }
 
     async fn store_compliance_check(&self, check: &ComplianceCheck) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        sqlx::query!(
+        sqlx::query(
             "INSERT INTO compliance_checks 
              (id, transaction_id, rule_id, check_type, status, risk_score, details, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-            check.id,
-            check.transaction_id,
-            check.rule_id,
-            serde_json::to_string(&check.check_type)?,
-            serde_json::to_string(&check.status)?,
-            check.risk_score,
-            check.details,
-            check.created_at
-        ).execute(self.db.as_ref()).await?;
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+        )
+        .bind(check.id)
+        .bind(check.transaction_id)
+        .bind(check.rule_id)
+        .bind(serde_json::to_string(&check.check_type)?)
+        .bind(serde_json::to_string(&check.status)?)
+        .bind(check.risk_score)
+        .bind(&check.details)
+        .bind(check.created_at)
+        .execute(self.db.as_ref())
+        .await?;
 
         Ok(())
     }
@@ -443,7 +470,7 @@ impl ComplianceEngine {
         
         for entry in entries {
             // Store in database
-            sqlx::query!(
+            sqlx::query(
                 "INSERT INTO watchlist_entries 
                  (id, entity_type, names, aliases, risk_level, source, added_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -452,15 +479,17 @@ impl ComplianceEngine {
                  names = EXCLUDED.names,
                  aliases = EXCLUDED.aliases,
                  risk_level = EXCLUDED.risk_level,
-                 source = EXCLUDED.source",
-                entry.id,
-                serde_json::to_string(&entry.entity_type)?,
-                serde_json::to_string(&entry.names)?,
-                serde_json::to_string(&entry.aliases)?,
-                serde_json::to_string(&entry.risk_level)?,
-                entry.source,
-                entry.added_at
-            ).execute(self.db.as_ref()).await?;
+                 source = EXCLUDED.source"
+            )
+            .bind(&entry.id)
+            .bind(serde_json::to_string(&entry.entity_type)?)
+            .bind(serde_json::to_string(&entry.names)?)
+            .bind(serde_json::to_string(&entry.aliases)?)
+            .bind(serde_json::to_string(&entry.risk_level)?)
+            .bind(&entry.source)
+            .bind(entry.added_at)
+            .execute(self.db.as_ref())
+            .await?;
 
             watchlists.insert(entry.id.clone(), entry);
         }

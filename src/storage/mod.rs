@@ -211,14 +211,12 @@ impl StorageManager {
             return Ok(true);
         }
         
-        let exists = sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)",
-            account_id
-        )
-        .fetch_one(&*self.pool)
-        .await
-        .map_err(|e| CoreError::StorageError(format!("Failed to check account existence: {}", e)))?
-        .unwrap_or(false);
+        let exists = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)")
+            .bind(account_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| CoreError::StorageError(format!("Failed to check account existence: {}", e)))?
+            .get::<bool, _>(0);
         
         self.record_query_time(start_time, false).await;
         Ok(exists)
@@ -234,16 +232,15 @@ impl StorageManager {
             return Ok(account);
         }
         
-        let account = sqlx::query_as!(
-            Account,
+        let account = sqlx::query_as::<_, Account>(
             r#"
             SELECT id, account_type, status, tier, daily_limit, monthly_limit,
                    kyc_status, risk_rating, created_at, updated_at, metadata
             FROM accounts 
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to get account info: {}", e)))?;
@@ -265,15 +262,14 @@ impl StorageManager {
             return Ok(balance);
         }
         
-        let balance = sqlx::query_scalar!(
-            "SELECT available_balance FROM account_balances WHERE account_id = $1 AND currency = $2",
-            account_id,
-            "USD"
-        )
-        .fetch_optional(&*self.pool)
-        .await
-        .map_err(|e| CoreError::StorageError(format!("Failed to get balance: {}", e)))?
-        .unwrap_or(Decimal::ZERO);
+        let balance = sqlx::query_scalar("SELECT available_balance FROM account_balances WHERE account_id = $1 AND currency = $2")
+            .bind(account_id)
+            .bind("USD")
+            .fetch_optional(&*self.pool)
+            .await
+            .map_err(|e| CoreError::StorageError(format!("Failed to get balance: {}", e)))?
+            .map(|row| row.get::<Decimal, _>(0))
+            .unwrap_or(Decimal::ZERO);
         
         // Cache the result
         self.cache.set_balance(account_id, "USD", balance).await;
@@ -286,16 +282,15 @@ impl StorageManager {
     pub async fn get_all_balances(&self, account_id: &str) -> Result<Vec<AccountBalance>> {
         let start_time = std::time::Instant::now();
         
-        let balances = sqlx::query_as!(
-            AccountBalance,
+        let balances = sqlx::query_as::<_, AccountBalance>(
             r#"
             SELECT account_id, currency, available_balance, pending_balance, 
                    reserved_balance, last_updated
             FROM account_balances 
             WHERE account_id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to get all balances: {}", e)))?;
@@ -313,24 +308,24 @@ impl StorageManager {
             .map_err(|e| CoreError::StorageError(format!("Failed to begin transaction: {}", e)))?;
         
         // Insert account
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO accounts (id, account_type, status, tier, daily_limit, monthly_limit,
                                  kyc_status, risk_rating, created_at, updated_at, metadata)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            "#,
-            account.id,
-            account.account_type,
-            account.status,
-            account.tier,
-            account.daily_limit,
-            account.monthly_limit,
-            account.kyc_status,
-            account.risk_rating,
-            account.created_at,
-            account.updated_at,
-            account.metadata
+            "#
         )
+        .bind(&account.id)
+        .bind(&account.account_type)
+        .bind(&account.status)
+        .bind(&account.tier)
+        .bind(account.daily_limit)
+        .bind(account.monthly_limit)
+        .bind(&account.kyc_status)
+        .bind(&account.risk_rating)
+        .bind(account.created_at)
+        .bind(account.updated_at)
+        .bind(&account.metadata)
         .execute(&mut *tx)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to create account: {}", e)))?;
@@ -338,19 +333,19 @@ impl StorageManager {
         // Create default balances for major currencies
         let currencies = ["USD", "EUR", "GBP"];
         for currency in currencies {
-            sqlx::query!(
+            sqlx::query(
                 r#"
                 INSERT INTO account_balances (account_id, currency, available_balance, 
                                             pending_balance, reserved_balance, last_updated)
                 VALUES ($1, $2, $3, $4, $5, $6)
-                "#,
-                account.id,
-                currency,
-                Decimal::ZERO,
-                Decimal::ZERO,
-                Decimal::ZERO,
-                Utc::now()
+                "#
             )
+            .bind(&account.id)
+            .bind(currency)
+            .bind(Decimal::ZERO)
+            .bind(Decimal::ZERO)
+            .bind(Decimal::ZERO)
+            .bind(Utc::now())
             .execute(&mut *tx)
             .await
             .map_err(|e| CoreError::StorageError(format!("Failed to create balance record: {}", e)))?;
@@ -392,19 +387,20 @@ impl StorageManager {
             .map_err(|e| CoreError::StorageError(format!("Failed to begin transaction: {}", e)))?;
         
         // Get current balance with row locking
-        let current_balance = sqlx::query_scalar!(
+        let current_balance = sqlx::query_scalar(
             r#"
             SELECT available_balance 
             FROM account_balances 
             WHERE account_id = $1 AND currency = $2
             FOR UPDATE
-            "#,
-            account_id,
-            currency
+            "#
         )
+        .bind(account_id)
+        .bind(currency)
         .fetch_one(&mut *tx)
         .await
-        .map_err(|e| CoreError::StorageError(format!("Failed to get current balance: {}", e)))?;
+        .map_err(|e| CoreError::StorageError(format!("Failed to get current balance: {}", e)))?
+        .get::<Decimal, _>(0);
         
         let new_balance = current_balance + amount_change;
         
@@ -414,36 +410,36 @@ impl StorageManager {
         }
         
         // Update balance
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE account_balances 
             SET available_balance = $1, last_updated = $2
             WHERE account_id = $3 AND currency = $4
-            "#,
-            new_balance,
-            Utc::now(),
-            account_id,
-            currency
+            "#
         )
+        .bind(new_balance)
+        .bind(Utc::now())
+        .bind(account_id)
+        .bind(currency)
         .execute(&mut *tx)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to update balance: {}", e)))?;
         
         // Record balance change
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO balance_changes (account_id, currency, amount_change, 
                                        balance_before, balance_after, transaction_id, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#,
-            account_id,
-            currency,
-            amount_change,
-            current_balance,
-            new_balance,
-            transaction_id,
-            Utc::now()
+            "#
         )
+        .bind(account_id)
+        .bind(currency)
+        .bind(amount_change)
+        .bind(current_balance)
+        .bind(new_balance)
+        .bind(transaction_id)
+        .bind(Utc::now())
         .execute(&mut *tx)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to record balance change: {}", e)))?;
@@ -473,7 +469,7 @@ impl StorageManager {
     pub async fn save_transaction(&self, tx: &TransactionRecord) -> Result<()> {
         let start_time = std::time::Instant::now();
         
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO transactions (
                 id, sender, receiver, amount, currency, transaction_type, status, priority,
@@ -481,29 +477,29 @@ impl StorageManager {
                 updated_at, signature, metadata, compliance_flags, risk_score, block_hash, block_number
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-            "#,
-            tx.id,
-            tx.sender,
-            tx.receiver,
-            tx.amount,
-            tx.currency,
-            tx.transaction_type,
-            tx.status,
-            tx.priority,
-            tx.reference,
-            tx.description,
-            tx.fee,
-            tx.exchange_rate,
-            tx.settlement_date,
-            tx.created_at,
-            tx.updated_at,
-            tx.signature,
-            tx.metadata,
-            &tx.compliance_flags,
-            tx.risk_score,
-            tx.block_hash,
-            tx.block_number
+            "#
         )
+        .bind(tx.id)
+        .bind(&tx.sender)
+        .bind(&tx.receiver)
+        .bind(tx.amount)
+        .bind(&tx.currency)
+        .bind(&tx.transaction_type)
+        .bind(&tx.status)
+        .bind(tx.priority)
+        .bind(&tx.reference)
+        .bind(&tx.description)
+        .bind(tx.fee)
+        .bind(tx.exchange_rate)
+        .bind(tx.settlement_date)
+        .bind(tx.created_at)
+        .bind(tx.updated_at)
+        .bind(&tx.signature)
+        .bind(&tx.metadata)
+        .bind(&tx.compliance_flags)
+        .bind(tx.risk_score)
+        .bind(&tx.block_hash)
+        .bind(tx.block_number)
         .execute(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to save transaction: {}", e)))?;
@@ -516,17 +512,16 @@ impl StorageManager {
     pub async fn get_transaction(&self, tx_id: &Uuid) -> Result<Option<TransactionRecord>> {
         let start_time = std::time::Instant::now();
         
-        let tx = sqlx::query_as!(
-            TransactionRecord,
+        let tx = sqlx::query_as::<_, TransactionRecord>(
             r#"
             SELECT id, sender, receiver, amount, currency, transaction_type, status, priority,
                    reference, description, fee, exchange_rate, settlement_date, created_at,
                    updated_at, signature, metadata, compliance_flags, risk_score, block_hash, block_number
             FROM transactions 
             WHERE id = $1
-            "#,
-            tx_id
+            "#
         )
+        .bind(tx_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to get transaction: {}", e)))?;
@@ -544,8 +539,7 @@ impl StorageManager {
     ) -> Result<Vec<TransactionRecord>> {
         let start_time = std::time::Instant::now();
         
-        let transactions = sqlx::query_as!(
-            TransactionRecord,
+        let transactions = sqlx::query_as::<_, TransactionRecord>(
             r#"
             SELECT id, sender, receiver, amount, currency, transaction_type, status, priority,
                    reference, description, fee, exchange_rate, settlement_date, created_at,
@@ -554,11 +548,11 @@ impl StorageManager {
             WHERE sender = $1 OR receiver = $1
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
-            "#,
-            account_id,
-            limit,
-            offset
+            "#
         )
+        .bind(account_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to get account transactions: {}", e)))?;
@@ -592,27 +586,27 @@ impl StorageManager {
             severity: "info".to_string(),
         };
         
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO audit_logs (
                 id, event_type, actor, resource, action, old_value, new_value,
                 ip_address, user_agent, session_id, timestamp, severity
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            "#,
-            audit_log.id,
-            audit_log.event_type,
-            audit_log.actor,
-            audit_log.resource,
-            audit_log.action,
-            audit_log.old_value,
-            audit_log.new_value,
-            audit_log.ip_address,
-            audit_log.user_agent,
-            audit_log.session_id,
-            audit_log.timestamp,
-            audit_log.severity
+            "#
         )
+        .bind(audit_log.id)
+        .bind(&audit_log.event_type)
+        .bind(&audit_log.actor)
+        .bind(&audit_log.resource)
+        .bind(&audit_log.action)
+        .bind(&audit_log.old_value)
+        .bind(&audit_log.new_value)
+        .bind(&audit_log.ip_address)
+        .bind(&audit_log.user_agent)
+        .bind(&audit_log.session_id)
+        .bind(audit_log.timestamp)
+        .bind(&audit_log.severity)
         .execute(&*self.pool)
         .await
         .map_err(|e| CoreError::StorageError(format!("Failed to log audit event: {}", e)))?;
@@ -655,17 +649,15 @@ impl StorageManager {
                 
                 // Cleanup old audit logs (keep 1 year)
                 let cutoff = Utc::now() - chrono::Duration::days(365);
-                if let Err(e) = sqlx::query!(
-                    "DELETE FROM audit_logs WHERE timestamp < $1",
-                    cutoff
-                )
+                if let Err(e) = sqlx::query("DELETE FROM audit_logs WHERE timestamp < $1")
+                    .bind(cutoff)
                 .execute(&*pool)
                 .await {
                     tracing::warn!("Failed to cleanup old audit logs: {}", e);
                 }
                 
                 // Update database statistics
-                if let Err(e) = sqlx::query!("ANALYZE")
+                if let Err(e) = sqlx::query("ANALYZE")
                     .execute(&*pool)
                     .await {
                     tracing::warn!("Failed to update database statistics: {}", e);

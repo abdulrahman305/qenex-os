@@ -14,7 +14,7 @@ use rust_decimal::Decimal;
 
 use crate::core::BankingCore;
 use crate::transaction::{TransactionRequest, TransactionStatus};
-use crate::compliance::{ScreeningResult, ComplianceRule};
+use crate::compliance::{ScreeningResult, ComplianceRule, ScreeningRequest};
 use crate::monitoring::MetricsCollector;
 
 pub struct ApiServer {
