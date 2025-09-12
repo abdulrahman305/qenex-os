@@ -345,7 +345,7 @@ impl CacheManager {
     {
         let mut conn = self.connection.write().await;
         
-        let cached_json: Option<String> = conn.get(key)
+        let cached_json: Option<String> = conn.get::<_, Option<String>>(key)
             .await
             .map_err(|e| CoreError::StorageError(format!("Failed to get cache entry: {}", e)))?;
         

@@ -185,7 +185,7 @@ pub enum TransactionStatus {
 }
 
 /// Transaction priority levels
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TransactionPriority {
     /// Critical system transactions
     Critical = 0,

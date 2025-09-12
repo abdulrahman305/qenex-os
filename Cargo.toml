@@ -59,8 +59,23 @@ dotenv = "0.15"
 thiserror = "1.0"
 anyhow = "1.0"
 
+# Cache
+redis = { version = "0.23", features = ["aio", "tokio-comp"] }
+
+# Metrics
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+
 # Testing
 mockall = "0.12"
+
+[features]
+default = ["std"]
+std = []
+kernel = []
+pkcs11 = []
+pqcrypto-kyber = []
+pqcrypto-sphincsplus = []
 
 [dev-dependencies]
 criterion = "0.5"
