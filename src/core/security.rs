@@ -10,7 +10,7 @@ use uuid::Uuid;
 use super::{CoreError, Result};
 
 /// Security threat levels
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThreatLevel {
     Low,
     Medium,
