@@ -1,106 +1,126 @@
 [package]
 name = "qenex-os"
-version = "1.0.0"
+version = "0.1.0"
 edition = "2021"
-authors = ["QENEX Team <dev@qenex.ai>"]
-description = "Production-ready banking system with secure transaction processing"
-license = "MIT"
-repository = "https://github.com/abdulrahman305/qenex-os"
+authors = ["QENEX Team"]
+description = "QENEX Financial Operating System"
 
-[dependencies]
-# Async runtime
-tokio = { version = "1.35", features = ["full"] }
-async-trait = "0.1"
+# Multiple binary targets for different components
+[[bin]]
+name = "qenex-kernel"
+path = "src/kernel/main.rs"
+required-features = ["kernel"]
 
-# Web framework
-axum = { version = "0.7", features = ["macros"] }
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "compression-br", "trace", "limit"] }
-hyper = "1.0"
+[[bin]]
+name = "qenex-userspace"
+path = "src/userspace/main.rs"
+required-features = ["userspace"]
 
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-bincode = "1.3"
+[[bin]]
+name = "qenex-api-server"
+path = "src/api/server.rs"
+required-features = ["userspace", "networking"]
 
-# Database
-sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "sqlite", "uuid", "chrono", "bigdecimal", "rust_decimal"], default-features = false }
+[lib]
+name = "qenex_os"
+path = "src/lib.rs"
 
-# Authentication & Security
-argon2 = "0.5"
-jsonwebtoken = "9.2"
-uuid = { version = "1.6", features = ["v4", "serde"] }
-sha2 = "0.10"
-sha3 = "0.10"
-ed25519-dalek = "2.1"
-x25519-dalek = "2.0"
-totp-lite = "2.0"
-rand = "0.8"
-zeroize = "1.7"
-
-# Validation
-validator = { version = "0.16", features = ["derive"] }
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Date/Time
-chrono = { version = "0.4", features = ["serde"] }
-
-# Numbers
-rust_decimal = { version = "1.33", features = ["serde"] }
-
-# Configuration
-config = "0.13"
-dotenv = "0.15"
-
-# Error handling
-thiserror = "1.0"
-anyhow = "1.0"
-
-# Cache
-redis = { version = "0.23", features = ["aio", "tokio-comp"] }
-
-# HTTP client
-reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
-
-# Random number generation
-rand_core = "0.6"
-
-# Async utilities
-futures = "0.3"
-
-# Bit flags
-bitflags = "2.4"
-
-# Metrics
-metrics = "0.21"
-metrics-exporter-prometheus = "0.12"
-
-# Testing
-mockall = "0.12"
-
+# Feature flags to control what gets compiled
 [features]
-default = ["std"]
-std = []
-kernel = []
-pkcs11 = []
-pqcrypto-kyber = []
-pqcrypto-sphincsplus = []
-pqcrypto-dilithium = []
+default = ["userspace", "networking", "database"]
 
+# Core features
+kernel = ["spin", "linked_list_allocator", "bootloader", "x86_64"]
+userspace = ["tokio", "serde", "chrono", "uuid", "tracing"]
+
+# Optional features
+networking = ["axum", "hyper", "tower"]
+database = ["sqlx", "redis"]
+crypto = ["ring", "rustls", "sha2"]
+ai = ["candle-core", "candle-nn"]
+consensus = ["libp2p"]
+
+# Development features
+testing = ["tokio-test", "mockall"]
+benchmarks = ["criterion"]
+
+# Core dependencies (always available)
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tracing = "0.1"
+
+# Kernel-only dependencies (no_std)
+spin = { version = "0.9", optional = true }
+linked_list_allocator = { version = "0.10", optional = true }
+bootloader = { version = "0.9", optional = true }
+x86_64 = { version = "0.14", optional = true }
+
+# Userspace dependencies (std)
+tokio = { version = "1.0", features = ["full"], optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+uuid = { version = "1.0", features = ["v4", "serde"], optional = true }
+
+# Networking dependencies
+axum = { version = "0.7", optional = true }
+hyper = { version = "1.0", optional = true }
+tower = { version = "0.4", optional = true }
+
+# Database dependencies
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "chrono", "uuid", "decimal"], optional = true }
+redis = { version = "0.24", features = ["tokio-comp"], optional = true }
+
+# Financial/Decimal calculations
+rust_decimal = { version = "1.30", features = ["serde"] }
+rust_decimal_macros = "1.30"
+
+# Crypto dependencies
+ring = { version = "0.17", optional = true }
+rustls = { version = "0.21", optional = true }
+sha2 = { version = "0.10", optional = true }
+
+# AI/ML dependencies
+candle-core = { version = "0.3", optional = true }
+candle-nn = { version = "0.3", optional = true }
+
+# P2P/Consensus dependencies
+libp2p = { version = "0.53", optional = true }
+
+# Development dependencies
 [dev-dependencies]
-criterion = "0.5"
-proptest = "1.4"
-rstest = "0.18"
+tokio-test = { version = "0.4", optional = true }
+mockall = { version = "0.12", optional = true }
+criterion = { version = "0.5", optional = true }
 
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-strip = true
+# Platform-specific configurations
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+x86_64 = { version = "0.14", optional = true }
 
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.28", optional = true }
+
+# Build configurations
 [profile.dev]
 opt-level = 0
 debug = true
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+codegen-units = 1
+
+[profile.kernel]
+inherits = "release"
+panic = "abort"
+opt-level = "s"  # Optimize for size in kernel
+
+# Workspace configuration if you want multiple crates
+[workspace]
+members = [
+    "crates/qenex-core",
+    "crates/qenex-kernel",
+    "crates/qenex-crypto",
+    "crates/qenex-consensus",
+    "crates/qenex-api"
+]
