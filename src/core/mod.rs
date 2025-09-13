@@ -269,6 +269,81 @@ impl BankingCore {
         // Implementation would track actual uptime
         0
     }
+    
+    /// Get system status for API
+    pub async fn get_system_status(&self) -> SystemHealth {
+        self.get_health().await
+    }
+    
+    /// Create transaction (wrapper for submit_transaction)
+    pub async fn create_transaction(&self, tx: transaction::Transaction) -> Result<Uuid> {
+        self.submit_transaction(tx).await
+    }
+    
+    /// Get transaction by ID
+    pub async fn get_transaction(&self, _tx_id: Uuid) -> Result<Option<transaction::Transaction>> {
+        // TODO: Implement transaction retrieval from storage
+        Ok(None)
+    }
+    
+    /// Get transaction status
+    pub async fn get_transaction_status(&self, _tx_id: Uuid) -> Result<String> {
+        // TODO: Implement transaction status lookup
+        Ok("pending".to_string())
+    }
+    
+    /// Create new account
+    pub async fn create_account(&self, _request: serde_json::Value) -> Result<String> {
+        // TODO: Implement account creation
+        Ok("ACC123".to_string())
+    }
+    
+    /// Get account information
+    pub async fn get_account(&self, _account_id: &str) -> Result<Option<serde_json::Value>> {
+        // TODO: Implement account retrieval
+        Ok(None)
+    }
+    
+    /// Get account balance
+    pub async fn get_balance(&self, account_id: &str) -> Result<u64> {
+        self.storage.get_balance(account_id).await
+    }
+    
+    /// Screen entity for compliance
+    pub async fn screen_entity(&self, _request: serde_json::Value) -> Result<serde_json::Value> {
+        // TODO: Implement entity screening
+        Ok(serde_json::json!({"status": "clear"}))
+    }
+    
+    /// Generate compliance report
+    pub async fn generate_compliance_report(&self, _request: serde_json::Value) -> Result<serde_json::Value> {
+        // TODO: Implement compliance reporting
+        Ok(serde_json::json!({"report": "generated"}))
+    }
+    
+    /// Assess risk for entity
+    pub async fn assess_risk(&self, _request: serde_json::Value) -> Result<serde_json::Value> {
+        // TODO: Implement risk assessment
+        Ok(serde_json::json!({"risk_score": 0.1}))
+    }
+    
+    /// Get risk score for entity
+    pub async fn get_risk_score(&self, _entity_id: &str) -> Result<f64> {
+        // TODO: Implement risk score lookup
+        Ok(0.1)
+    }
+    
+    /// Send SWIFT message
+    pub async fn send_swift_message(&self, _request: serde_json::Value) -> Result<serde_json::Value> {
+        // TODO: Implement SWIFT messaging
+        Ok(serde_json::json!({"message_id": "SWIFT123"}))
+    }
+    
+    /// Initiate SEPA transfer
+    pub async fn initiate_sepa_transfer(&self, _request: serde_json::Value) -> Result<serde_json::Value> {
+        // TODO: Implement SEPA transfers
+        Ok(serde_json::json!({"transfer_id": "SEPA123"}))
+    }
 }
 
 /// System health information

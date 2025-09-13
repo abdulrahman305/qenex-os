@@ -268,7 +268,7 @@ impl StorageManager {
             .fetch_optional(&*self.pool)
             .await
             .map_err(|e| CoreError::StorageError(format!("Failed to get balance: {}", e)))?
-            .map(|row| row.get::<Decimal, _>(0))
+            .map(|row: Decimal| row)
             .unwrap_or(Decimal::ZERO);
         
         // Cache the result
@@ -387,7 +387,7 @@ impl StorageManager {
             .map_err(|e| CoreError::StorageError(format!("Failed to begin transaction: {}", e)))?;
         
         // Get current balance with row locking
-        let current_balance = sqlx::query_scalar(
+        let current_balance = sqlx::query_scalar::<_, Decimal>(
             r#"
             SELECT available_balance 
             FROM account_balances 

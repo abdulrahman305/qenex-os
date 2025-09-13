@@ -32,7 +32,7 @@ pub struct ScreeningRequest {
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use tokio::sync::RwLock;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 
 pub use live_feeds::{

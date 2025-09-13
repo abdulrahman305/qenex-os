@@ -105,4 +105,30 @@ impl MetricsCollector {
         tracing::info!("Stopping metrics collection");
         Ok(())
     }
+    
+    /// Increment transaction count metric
+    pub fn increment_transaction_count(&mut self) {
+        self.record_metric("transaction_count".to_string(), 1.0);
+    }
+    
+    /// Get all metrics
+    pub async fn get_all_metrics(&self) -> HashMap<String, Vec<MetricData>> {
+        self.metrics.clone()
+    }
+    
+    /// Get transaction metrics
+    pub async fn get_transaction_metrics(&self) -> HashMap<String, Vec<MetricData>> {
+        let mut tx_metrics = HashMap::new();
+        
+        #[cfg(feature = "std")]
+        {
+            for (key, value) in &self.metrics {
+                if key.contains("transaction") {
+                    tx_metrics.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        
+        tx_metrics
+    }
 }
