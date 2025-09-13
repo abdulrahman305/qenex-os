@@ -892,9 +892,8 @@ impl WriteAheadLogManager {
             let mut guard = self.log_file.lock().await;
             if let Some(ref mut file) = guard.as_mut() {
                 use std::io::Write;
-                    file.flush().map_err(|_| ACIDError::WALError)?;
-                    file.sync_all().map_err(|_| ACIDError::WALError)?;
-                }
+                file.flush().map_err(|_| ACIDError::WALError)?;
+                file.sync_all().map_err(|_| ACIDError::WALError)?;
             }
         }
         

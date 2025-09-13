@@ -844,7 +844,7 @@ async def main():
             logger.info(f"Balances: Account1={balance1}, Account2={balance2}")
     
     # Simulate API server
-    logger.info("API Server ready at https://abdulrahman305.github.io/qenex-docs)
+    logger.info("API Server ready at https://abdulrahman305.github.io/qenex-docs")
     
     # Keep running
     try:
